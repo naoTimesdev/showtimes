@@ -3,7 +3,7 @@ name = "showtimes"
 version = "0.1.0"
 description = "A full-featured project management for foreign-media translation group"
 authors = ["noaione <noaione0809@gmail.com>"]
-license = "MIT"
+license = "AGPL-3.0"
 
 [tool.poetry.dependencies]
 python = "^3.9"

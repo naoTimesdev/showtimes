@@ -1,0 +1,69 @@
+[tool.poetry]
+name = "showtimes"
+version = "0.1.0"
+description = "A full-featured project management for foreign-media translation group"
+authors = ["noaione <noaione0809@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.88.0"
+redis = {extras = ["hiredis"], version = "^4.4.0"}
+strawberry-graphql = {extras = ["fastapi"], version = "^0.145.0"}
+motor = "3.0.0"
+beanie = "^1.15.4"
+itsdangerous = "^2.1.2"
+orjson = "^3.8.3"
+websockets = "^10.4"
+coloredlogs = "^15.0.1"
+pendulum = "^2.1.2"
+aiopath = "0.5.12"
+argon2-cffi = "^21.3.0"
+psutil = "^5.9.4"
+
+[tool.poetry.dev-dependencies]
+flake8 = "^6.0.0"
+isort = "^5.10.1"
+black = "^22.10.0"
+uvicorn = "^0.20.0"
+pep8-naming = "^0.13.2"
+flake8-bugbear = "^22.10.27"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ["py38", "py39"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | env
+  | _build
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+extend_skip = ["_dataset/**", "env/**", "venv/**", "./venv/**", ".pytest_cache/**", ".nox/**"]
+line_length = 110
+skip_gitignore = true
+
+[tool.pyright]
+include = ["internals", "pipelines", "routes", "app.py"]
+exclude = ["venv", "env", "node_modules", ".venv", ".env", ".nox", ".pytest_cache", ".mypy_cache", ".tox", "build", "dist", "_build", "**/__pycache__"]
+ignore = ["_testing"]
+
+reportMissingImports = true
+venv = "."
+
+pythonVersion = "3.9"

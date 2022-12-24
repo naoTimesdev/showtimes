@@ -44,8 +44,9 @@ if TYPE_CHECKING:
 
 __all__ = ("GraphQLResult", "GraphQLPaginationInfo", "GraphQLClient")
 ResultT = TypeVar("ResultT", bound="AttributeDict")
-PredicateSyncFunc = Callable[[Optional[ResultT]], Tuple[bool, Optional[str], Optional[str]]]
-PredicateAwaitFunc = Callable[[Optional[ResultT]], Awaitable[Tuple[bool, Optional[str], Optional[str]]]]
+PredicateResult = Tuple[bool, Optional[str | int], Optional[str]]
+PredicateSyncFunc = Callable[[Optional[ResultT]], PredicateResult]
+PredicateAwaitFunc = Callable[[Optional[ResultT]], Awaitable[PredicateResult]]
 PredicateFunc = PredicateSyncFunc | PredicateAwaitFunc
 
 
@@ -159,9 +160,7 @@ class GraphQLClient(Generic[ResultT]):
                     [GraphQLError("Failed to parse JSON file", code="50000")],
                 )
 
-    async def _execute_predicate(
-        self, predicate: PredicateFunc, content: Optional[ResultT] = None
-    ) -> Tuple[bool, str | None, str | None]:
+    async def _execute_predicate(self, predicate: PredicateFunc, content: Optional[ResultT] = None) -> PredicateResult:
         """Execute the predicate function and return the result"""
         real_func = cast(PredicateFunc, getattr(predicate, "func", predicate))
         if asyncio.iscoroutinefunction(real_func):

@@ -19,6 +19,7 @@ import logging
 import traceback
 from dataclasses import dataclass
 from typing import (
+    TYPE_CHECKING,
     Any,
     AsyncGenerator,
     Awaitable,
@@ -37,6 +38,9 @@ import aiohttp
 from .._metadata import __version__
 from ..models.abstract import AttributeDict
 from ..utils import complex_walk
+
+if TYPE_CHECKING:
+    from multidict import CIMultiDictProxy
 
 __all__ = ("GraphQLResult", "GraphQLPaginationInfo", "GraphQLClient")
 ResultT = TypeVar("ResultT", bound="AttributeDict")
@@ -79,6 +83,7 @@ class GraphQLError:
 @dataclass
 class GraphQLResult(Generic[ResultT]):
     query: str
+    headers: "CIMultiDictProxy[str]"
     operationName: Optional[str] = None
     data: Optional[ResultT] = None
     errors: Optional[List[GraphQLError]] = None
@@ -94,7 +99,7 @@ class GraphQLPaginationInfo:
 class GraphQLClient(Generic[ResultT]):
     def __init__(self, endpoint: str, session: Optional[aiohttp.ClientSession] = None):
         self.endpoint = endpoint
-        self.logger = logging.getLogger("http.GraphQLClient")
+        self.logger = logging.getLogger("Controllers.GraphQLClient")
 
         self._outside_session = True
         self._sesi: aiohttp.ClientSession = session or aiohttp.ClientSession(
@@ -141,11 +146,17 @@ class GraphQLClient(Generic[ResultT]):
                         error_loc = GraphQLErrorLocation(error_loc.get("line", -1), error_loc.get("column", -1))
                     stack_code = cast(Optional[str], complex_walk(cast(dict, error), "extensions.code"))
                     all_errors.append(GraphQLError(msg, error_loc, stack_code))
-                return GraphQLResult(query, operation_name, self._convert_data(get_data), all_errors, resp.status)
+                return GraphQLResult(
+                    query, resp.headers, operation_name, self._convert_data(get_data), all_errors, resp.status
+                )
             except Exception:
                 self.logger.error("An exception occured!\n%s", traceback.format_exc())
                 return GraphQLResult(
-                    query, operation_name, None, [GraphQLError("Failed to parse JSON file", code="50000")]
+                    query,
+                    resp.headers,
+                    operation_name,
+                    None,
+                    [GraphQLError("Failed to parse JSON file", code="50000")],
                 )
 
     async def _execute_predicate(

@@ -19,8 +19,7 @@ from typing import Optional
 from uuid import UUID
 
 # import strawberry as gql
-from beanie import Document, Insert, Link, Replace, SaveChanges, Update, before_event
-from bson import ObjectId
+from beanie import Document, Insert, Link, PydanticObjectId, Replace, SaveChanges, Update, before_event
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
@@ -189,7 +188,7 @@ class ShowProject(Document):
     """The status of each episode"""
     airtime: Optional[float] = None
     """The unix timestamp of the airing time, if any."""
-    collaboration: list[ObjectId] = Field(default_factory=list)
+    collaboration: list[PydanticObjectId] = Field(default_factory=list)
     """The list of collaborators, can be used to link to other projects."""
 
     show_id: UUID = Field(default_factory=make_uuid)

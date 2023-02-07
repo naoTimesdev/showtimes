@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING, Optional, cast
 
 import aiohttp
 
+from ..utils import complex_walk
 from .gqlapi import GraphQLClient, GraphQLResult
 from .ratelimiter import NetworkRateLimiter
-from ..utils import complex_walk
 
 if TYPE_CHECKING:
     from multidict import CIMultiDictProxy

@@ -19,12 +19,25 @@ from typing import Optional
 from uuid import UUID
 
 # import strawberry as gql
-from beanie import Document, Insert, Link, PydanticObjectId, Replace, SaveChanges, Update, before_event
+from beanie import Document, Insert, Link, Replace, SaveChanges, Update, before_event
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
 from ..utils import make_uuid
 from ._doc import _coerce_to_pendulum, pendulum_utc
+
+
+class DefaultIntegrationType:
+    """
+    A simple class to hold the default integration type.
+    """
+
+    DiscordRole = "DISCORD_ROLE"
+    DiscordUser = "DISCORD_USER"
+    DiscordChannel = "DISCORD_TEXT_CHANNEL"
+    FansubDB = "FANSUBDB_ID"
+    FansubDBProject = "FANSUBDB_PROJECT_ID"
+    FansubDBAnime = "FANSUBDB_ANIME_ID"
 
 
 class IntegrationId(BaseModel):
@@ -59,6 +72,20 @@ class RoleStatus(BaseModel):
 
     key: str
     name: str
+    """
+    The expanded name of the key.
+    Developer can also implement their own translation as long,
+    as it is mapped to the key on their program.
+
+    Some default key are:
+    - TL
+    - TLC
+    - ENC
+    - ED
+    - TM
+    - TS
+    - QC
+    """
     finished: bool = Field(default=False)
 
 
@@ -115,7 +142,9 @@ class ShowActor(BaseModel):
     """
 
     key: str
+    """The key name of the actor. (should be uppercase)"""
     actor: Optional[Link[RoleActor]] = None
+    """The link to the actor model."""
 
 
 class ShowPoster(BaseModel):
@@ -137,6 +166,7 @@ class ShowExternalEpisode(BaseModel):
     season: int = Field(default=1)
     title: Optional[str] = None
     airtime: Optional[float] = None
+    """The unix timestamp of the airing time, if any."""
 
 
 class ShowExternalData(Document):
@@ -149,10 +179,15 @@ class ShowExternalData(Document):
         use_state_management = True
 
 
-class ShowExternalAnilist(ShowExternalData):
+class ShowExternalStart(BaseModel):
+    """Start time mixin for external data."""
+
+    start_time: Optional[float] = None
+
+
+class ShowExternalAnilist(ShowExternalData, ShowExternalStart):
     ani_id: str
     mal_id: Optional[str] = None  # for other integration
-    start_time: Optional[float] = None
 
     @before_event(Insert, Replace, Update, SaveChanges)
     def force_type(self):
@@ -160,9 +195,8 @@ class ShowExternalAnilist(ShowExternalData):
         self.type = ShowExternalType.ANILIST
 
 
-class ShowExternalTMDB(ShowExternalData):
+class ShowExternalTMDB(ShowExternalData, ShowExternalStart):
     tmdb_id: str
-    start_time: Optional[float] = None
 
     @before_event(Insert, Replace, Update, SaveChanges)
     def force_type(self):
@@ -186,10 +220,6 @@ class ShowProject(Document):
     """The assignments of each role"""
     episodes: list[EpisodeStatus] = Field(default_factory=list)
     """The status of each episode"""
-    airtime: Optional[float] = None
-    """The unix timestamp of the airing time, if any."""
-    collaboration: list[PydanticObjectId] = Field(default_factory=list)
-    """The list of collaborators, can be used to link to other projects."""
 
     show_id: UUID = Field(default_factory=make_uuid)
     """The ID of this project."""
@@ -204,9 +234,9 @@ class ShowProject(Document):
     updated_at: DateTime = Field(default_factory=pendulum_utc)
     """The time this project was last updated."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def _swap_revision(self):
         _coerce_to_pendulum(self)
+        return super()._swap_revision()
 
     class Settings:
         name = "ShowtimesProjects"

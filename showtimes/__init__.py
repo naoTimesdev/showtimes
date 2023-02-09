@@ -9,5 +9,6 @@ The complete API of Showtimes Backend Project.
 
 from . import controllers, extensions, models
 from ._metadata import *
+from .app import *
 from .tooling import *
 from .utils import *

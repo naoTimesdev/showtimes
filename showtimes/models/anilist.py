@@ -20,6 +20,16 @@ from .abstract import AttributeDict
 
 AT = TypeVar("AT")
 
+__all__ = (
+    "AnilistFuzzyDate",
+    "AnilistAiringScheduleNode",
+    "AnilistAiringSchedules",
+    "AnilistCoverImage",
+    "AnilistTitle",
+    "AnilistAnimeScheduleResult",
+    "AnilistAnimeInfoResult",
+    "AnilistQueryMedia",
+)
 AnilistAnimeFormat = Literal[
     "TV",
     "TV_SHORT",

@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+__all__ = ("AttributeDict",)
+
 
 class AttributeDict(dict):
     """An attribute-based dictionary."""

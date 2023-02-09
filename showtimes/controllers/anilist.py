@@ -26,6 +26,8 @@ from .ratelimiter import NetworkRateLimiter
 if TYPE_CHECKING:
     from multidict import CIMultiDictProxy
 
+__all__ = ("AnilistAPI",)
+
 
 class AnilistAPI:
     """

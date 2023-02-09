@@ -14,9 +14,36 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
-__name__ = "showtimes"
-__version__ = "0.1.0"
-__author__ = "noaione"
-__auuthor_email__ = "hi@n4o.xyz"
-__license__ = "AGPL-3.0"
-__description__ = "A full-featured project management API for foreign-media translation group"
+from showtimes.models.database import ShowtimesUser, UserType
+
+__all__ = (
+    "get_claim_status",
+    "ClaimStatusLatch",
+)
+
+
+class ClaimStatusLatch:
+    def __init__(self) -> None:
+        self.__claimed = False
+
+    @property
+    def claimed(self):
+        return self.__claimed
+
+    @claimed.setter
+    def claimed(self, value: bool):
+        self.__claimed = bool(value)
+
+    def __bool__(self):
+        return self.__claimed
+
+    async def set_from_db(self):
+        total = await ShowtimesUser.find_one(ShowtimesUser.privilege == UserType.ADMIN).count()
+        self.__claimed = total > 0
+
+
+_ClaimLatch = ClaimStatusLatch()
+
+
+def get_claim_status():
+    return _ClaimLatch

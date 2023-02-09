@@ -38,6 +38,7 @@ def _unpack_forwardref(annotation):
 
 
 def _coerce_to_pendulum(clss: Document):
+    # Some crackhead solution to parse DateTime to pendulum instance
     # Get annotation list, and check if it's DateTime instance
     # If it is, then check if it's a pendulum instance or not
 

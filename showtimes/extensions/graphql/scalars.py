@@ -14,9 +14,32 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
-__name__ = "showtimes"
-__version__ = "0.1.0"
-__author__ = "noaione"
-__auuthor_email__ = "hi@n4o.xyz"
-__license__ = "AGPL-3.0"
-__description__ = "A full-featured project management API for foreign-media translation group"
+from __future__ import annotations
+
+from typing import NewType
+from uuid import UUID as UUIDMod  # noqa: N811
+
+import strawberry as gql
+
+__all__ = (
+    "UUID",
+    "Upload",
+    "UploadType",
+)
+
+
+UploadType = NewType("Upload", bytes)
+UUID = gql.scalar(
+    UUIDMod,
+    name="UUID",
+    description="An UUID4 formatted string",
+    serialize=lambda x: str(x),
+    parse_value=lambda x: UUIDMod(x),
+)
+
+Upload = gql.scalar(
+    UploadType,
+    name="Upload",
+    description="A file to be uploaded (`bytes` data) [mutation only]",
+    parse_value=lambda x: x,
+)

@@ -14,9 +14,20 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
-__name__ = "showtimes"
-__version__ = "0.1.0"
-__author__ = "noaione"
-__auuthor_email__ = "hi@n4o.xyz"
-__license__ = "AGPL-3.0"
-__description__ = "A full-featured project management API for foreign-media translation group"
+from __future__ import annotations
+
+from typing import Optional
+
+from strawberry.fastapi import BaseContext
+
+from showtimes.controllers.sessions import SessionHandler
+from showtimes.models.session import UserSession
+
+__all__ = ("SessionQLContext",)
+
+
+class SessionQLContext(BaseContext):
+    def __init__(self, session: SessionHandler, user: Optional[UserSession] = None):
+        self.session: SessionHandler = session
+        self.user: Optional[UserSession] = user
+        self.session_latch: bool = False

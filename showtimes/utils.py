@@ -25,6 +25,8 @@ __all__ = (
     "get_indexed",
     "complex_walk",
     "generate_custom_code",
+    "to_boolean",
+    "try_int",
 )
 
 
@@ -157,3 +159,16 @@ def generate_custom_code(length: int = 8, include_numbers: bool = False, include
         letters_used += ascii_uppercase
     generated = "".join([random.choice(letters_used) for _ in range(length)])  # nosec
     return generated
+
+
+def to_boolean(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.lower() in ("yes", "true", "t", "y", "1")
+    return bool(value)
+
+
+def try_int(value: Any, default: int | None = None) -> int | None:
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default

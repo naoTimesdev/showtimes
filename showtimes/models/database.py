@@ -261,9 +261,9 @@ class CollaborationLinkStatus(int, Enum):
 
 
 class ShowCollaborationLink(BaseModel):
-    source: Link["ShowtimesServer"]
     project: Link[ShowProject]
     status: CollaborationLinkStatus
+    servers: list[UUID] = Field(default_factory=list)
 
 
 class UserType(str, Enum):
@@ -289,6 +289,15 @@ class ShowtimesUserDiscord(BaseModel):
     expires_at: float
 
 
+class ShowtimesLegacyUser(BaseModel):
+    """
+    The legacy information, if exist
+    force user to migrate by themselves via Discord.
+    """
+
+    user_id: str
+
+
 class ShowtimesUser(Document):
     """
     The user authentication and more.
@@ -296,13 +305,26 @@ class ShowtimesUser(Document):
 
     username: str
     """The username or the name of the user."""
-    password: str
-    """Hashed password, ARGON2ID"""
     privilege: UserType
     """The privilege of the user."""
+    password: Optional[str] = None
+    """Hashed password, ARGON2ID"""
+    integrations: list[IntegrationId] = Field(default_factory=list)
+    """Integrations of the user"""
     discord_meta: Optional[ShowtimesUserDiscord] = None
+    """Discord OAuth2 information"""
+    legacy_info: Optional[ShowtimesLegacyUser] = None
+    """Legacy user informaton"""
 
     user_id: UUID = Field(default_factory=make_uuid)
+
+    def should_migrate(self) -> bool:
+        return self.legacy_info is not None
+
+    @before_event(Insert, Replace, Update, SaveChanges)
+    def make_sure(self):
+        if self.password is None and self.discord_meta is None:
+            raise ValueError("Password or Discord metadata must be provided.")
 
     class Settings:
         name = "ShowtimesUsers"
@@ -326,6 +348,8 @@ class ShowtimesServer(Document):
     """The integrations of this server."""
     owners: list[Link[ShowtimesUser]] = Field(default_factory=list)
     """The owners of this server."""
+    avatar: Optional[str] = None
+    """The avatar link of this server."""
 
     server_id: UUID = Field(default_factory=make_uuid)
 

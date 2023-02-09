@@ -14,9 +14,27 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
-__name__ = "showtimes"
-__version__ = "0.1.0"
-__author__ = "noaione"
-__auuthor_email__ = "hi@n4o.xyz"
-__license__ = "AGPL-3.0"
-__description__ = "A full-featured project management API for foreign-media translation group"
+from __future__ import annotations
+
+from fastapi import HTTPException
+
+__all__ = (
+    "BackendError",
+    "SessionError",
+)
+
+
+class BackendError(Exception):
+    def __init__(self, error: str) -> None:
+        self.error = error
+        super().__init__(error)
+
+
+class SessionError(HTTPException):
+    """A custom handler for session errors.
+
+    Created so I can handle session errors in a single exception
+    handling with FastAPI.
+    """
+
+    pass

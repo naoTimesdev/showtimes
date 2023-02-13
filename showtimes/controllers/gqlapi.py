@@ -37,6 +37,7 @@ import aiohttp
 
 from .._metadata import __version__
 from ..models.abstract import AttributeDict
+from ..tooling import get_logger
 from ..utils import complex_walk
 
 if TYPE_CHECKING:
@@ -100,7 +101,7 @@ class GraphQLPaginationInfo:
 class GraphQLClient(Generic[ResultT]):
     def __init__(self, endpoint: str, session: Optional[aiohttp.ClientSession] = None):
         self.endpoint = endpoint
-        self.logger = logging.getLogger("Controllers.GraphQLClient")
+        self.logger: logging.Logger = get_logger()
 
         self._outside_session = True
         self._sesi: aiohttp.ClientSession = session or aiohttp.ClientSession(

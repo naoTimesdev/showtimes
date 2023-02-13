@@ -17,22 +17,28 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import glob
+import inspect
 import logging
 import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, overload
 
 import coloredlogs
 from dotenv.main import DotEnv
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 __all__ = (
     "RollingFileHandler",
     "setup_logger",
     "load_env",
     "get_env_config",
+    "get_logger",
 )
+ROOT_DIR = Path(__file__).absolute().parent
 
 
 class RollingFileHandler(RotatingFileHandler):
@@ -175,3 +181,53 @@ def get_env_config(is_production: bool = True):
         **env_back_dev,
     }
     return env_merged
+
+
+def _inspect_module_name() -> tuple[ModuleType | None, str | None]:
+    try:
+        stack = inspect.stack()[2]
+    except Exception:
+        return None, None
+    # Get class name
+    try:
+        class_name = stack[0].f_locals["self"].__class__.__name__
+    except Exception:
+        class_name = None
+    return inspect.getmodule(stack[0]), class_name
+
+
+def _create_log_name() -> str | None:
+    mod, cls_name = _inspect_module_name()
+    if mod is None:
+        return None
+    # Get the path
+    file_miss = mod.__file__
+    if file_miss is None:
+        return None
+    mod_path = Path(file_miss)
+    relative = mod_path.relative_to(ROOT_DIR).as_posix().split("/")
+    # Get the name of the module
+    actual_name = []
+    for name in relative:
+        actual_name.append(name.capitalize().replace(".py", ""))
+    mod_name = ".".join(actual_name)
+    if cls_name:
+        mod_name += f".{cls_name}"
+    return mod_name
+
+
+@overload
+def get_logger() -> logging.Logger:
+    ...
+
+
+@overload
+def get_logger(name: str) -> logging.Logger:
+    ...
+
+
+def get_logger(name: str | None = None):
+    inspect_name = _create_log_name()
+    if name is not None:
+        return logging.getLogger(name)
+    return logging.getLogger(inspect_name)

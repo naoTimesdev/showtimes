@@ -14,14 +14,14 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
-from bson import ObjectId
-import strawberry as gql
 from base64 import b64decode, b64encode
 from typing import Optional, TypeAlias
+
+import strawberry as gql
+from bson import ObjectId
 from bson.errors import InvalidId
 
 from showtimes.graphql.exceptions import InvalidCursor, UnknownCursorFormat
-
 
 __all__ = (
     "Cursor",

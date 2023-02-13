@@ -17,7 +17,6 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from enum import Enum
-
 from typing import Generic, List, Optional, TypeVar
 
 import strawberry as gql

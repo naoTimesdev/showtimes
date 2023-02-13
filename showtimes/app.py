@@ -24,6 +24,7 @@ from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
 from showtimes.controllers.sessions.errors import SessionError
 from showtimes.controllers.sessions.handler import check_session, create_session_handler, get_session_handler
+from showtimes.controllers.storages import S3Storage, get_s3_storage, init_s3_storage
 from showtimes.extensions.fastapi.discovery import discover_routes
 from showtimes.extensions.fastapi.responses import ORJSONXResponse, ResponseType
 from showtimes.extensions.graphql.context import SessionQLContext
@@ -88,9 +89,17 @@ async def app_on_startup(run_production: bool = True):
     await claim_latch.set_from_db()
     logger.info(f"Server claim status: {claim_latch.claimed}")
 
-    # TODO: Storage system
+    S3_HOST = env_config.get("S3_HOST")
+    S3_KEY = env_config.get("S3_ACCESS_KEY")
+    S3_SECRET = env_config.get("S3_SECRET_KEY")
+    S3_REGION = env_config.get("S3_REGION")
+    S3_BUCKET = env_config.get("S3_BUCKET")
 
-    # TODO: Session handler
+    if S3_SECRET is not None and S3_KEY is not None and S3_BUCKET is not None:
+        logger.info("Initializing S3 storage...")
+        await init_s3_storage(S3_BUCKET, S3_KEY, S3_SECRET, S3_REGION, host=S3_HOST)
+        logger.info("S3 storage initialized!")
+
     logger.info("Creating session...")
     DEFAULT_KEY = "SHOWTIMES_BACKEND_SECRET"
     SECRET_KEY = env_config.get("SECRET_KEY") or DEFAULT_KEY
@@ -120,6 +129,17 @@ async def app_on_shutdown():
         logger.info("Closed redis session backend!")
     except Exception:
         pass
+
+    stor_s3: S3Storage | None = None
+    try:
+        stor_s3 = get_s3_storage()
+    except RuntimeError:
+        pass
+
+    if stor_s3 is not None:
+        logger.info("Closing S3 storage...")
+        await stor_s3.close()
+        logger.info("Closed S3 storage!")
 
 
 async def exceptions_handler_session_error(_: Request, exc: SessionError):

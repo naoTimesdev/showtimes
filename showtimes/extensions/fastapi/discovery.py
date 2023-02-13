@@ -38,6 +38,7 @@ def discover_routes(
 ):
     mod = app_or_router.__module__
     _imported = set()
+    route_found: list[str] = []
     routes_iter = route_path.glob("*.py") if not recursive else route_path.rglob("*.py")
     for route in routes_iter:
         if route.name == "__init__.py":
@@ -65,3 +66,5 @@ def discover_routes(
             continue
         logger.info(f'Attaching route "{route.stem}"')
         app_or_router.include_router(router_code, **router_kwargs)
+        route_found.append(route.stem)
+    return route_found

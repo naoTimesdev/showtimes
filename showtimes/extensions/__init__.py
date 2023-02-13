@@ -1,6 +1,6 @@
 """
-showtimes.extensions.fastapi
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+showtimes.extensions
+~~~~~~~~~~~~~~~~~~~~
 Extension or extra codes for modules that we are using.
 
 :copyright: (c) 2022-present naoTimes Project

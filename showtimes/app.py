@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+import functools
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Request, WebSocket
@@ -28,8 +30,8 @@ from showtimes.controllers.storages import S3Storage, get_s3_storage, init_s3_st
 from showtimes.extensions.fastapi.discovery import discover_routes
 from showtimes.extensions.fastapi.responses import ORJSONXResponse, ResponseType
 from showtimes.extensions.graphql.context import SessionQLContext
-
-# from showtimes.extensions.graphql.router import SessionGraphQLRouter
+from showtimes.extensions.graphql.router import SessionGraphQLRouter
+from showtimes.graphql.schema import make_schema
 from showtimes.utils import to_boolean, try_int
 
 from ._metadata import __description__ as app_description
@@ -160,7 +162,7 @@ async def context_handler_gql_session(request: Request | None = None, websocket:
         return SessionQLContext(session=session)
 
 
-async def context_handler(
+async def context_gql_handler(
     custom_context=Depends(context_handler_gql_session),
 ):
     claim_stat = get_claim_status()
@@ -170,6 +172,8 @@ async def context_handler(
 
 
 def create_app():
+    logger = get_root_logger()
+    logger.info("Creating backend app...")
     app = FastAPI(
         title="Showtimes API",
         description=app_description,
@@ -181,31 +185,41 @@ def create_app():
         contact={"url": "https://github.com/naoTimesdev/showtimes/"},
     )
 
-    app.router.add_event_handler("startup", app_on_startup)
+    run_dev = to_boolean(os.environ.get("DEVELOPMENT", "0"))
+    logger.info(f"Running in {'development' if run_dev else 'production'} mode")
+    app.router.add_event_handler("startup", functools.partial(app_on_startup, run_production=not run_dev))
     app.router.add_event_handler("shutdown", app_on_shutdown)
     app.add_exception_handler(SessionError, exceptions_handler_session_error)
 
     # --> Router API
+    logger.info("Discovering routes...")
     api_router = APIRouter(prefix="/api")
 
     ORJSONXDefault = Default(ORJSONXResponse)
     routes_folder = CURRENT_DIR / "routes"
-    discover_routes(
+    loaded_routes = discover_routes(
         app_or_router=api_router, route_path=routes_folder, recursive=True, default_response_class=ORJSONXDefault
     )
+    logger.info(f"Loaded {len(loaded_routes)} routes!")
     # <--
 
     # --> GraphQL Router
-    # graphql_router = SessionGraphQLRouter()
+    logger.info("Preparing GraphQL router...")
+    graphql_router = SessionGraphQLRouter(
+        schema=make_schema(),
+        context_getter=context_gql_handler,
+    )
     # <--
 
     # --> Include Router
+    logger.info("Binding routes...")
     app.include_router(api_router)
-    # app.include_router(graphql_router)
+    app.include_router(graphql_router)
     # <--
 
     @app.get("/", include_in_schema=False)
     async def root_api_redirect():
         return RedirectResponse(url="/docs")
 
+    logger.info("Backend app created!")
     return app

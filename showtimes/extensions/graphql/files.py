@@ -23,7 +23,7 @@ from mimetypes import guess_extension
 import magic
 from fastapi import UploadFile
 
-from showtimes.controllers.storages import get_local_storage
+from showtimes.controllers.storages import get_storage
 from showtimes.utils import make_uuid
 
 from .scalars import Upload
@@ -49,6 +49,26 @@ class UploadResult:
     file_size: int
 
 
+def _mmagic_modern_img_format(magic: bytes):
+    # For older versions of libmagic
+    # AVIF/HEIF/HEIC
+    if magic[4:8] == b"ftyp":
+        if magic[8:12] in (b"heic", b"heix", b"heis" b"heim"):
+            return "image/heic"
+        if magic[8:12] in (b"hevc", b"hevx", b"hevs" b"hevm"):
+            return "image/heic-sequence"
+        if magic[8:12] in (b"avif"):
+            return "image/avif"
+    # JXL
+    # FF 0A BA 21 E8 BC 80 84 E2 42 00 12 88
+    if magic[:2] == b"\xff\x0a" or magic[:12] == b"\x00\x00\x00\x0c\x4a\x58\x4c\x20\x0d\x0a\x87\x0a":
+        return "image/jxl"
+    # WEBP
+    if magic[:4] == b"RIFF" and magic[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 async def get_file_mimetype(file: UploadFile):
     # Get current seek position
     loop = asyncio.get_event_loop()
@@ -72,8 +92,13 @@ async def handle_image_upload(file: Upload, uuid: str, image_type: str) -> Uploa
         raise TypeError("Expected UploadFile, got %r" % file)
 
     # Handle upload
-    stor = get_local_storage()
+    stor = get_storage()
     mimetype = await get_file_mimetype(file)
+    if mimetype == "application/octet-stream":
+        magic_bits = await file.read(16)
+        # Special way to detect AVIF/HEIF/HEIC/JXL
+        # Seems like libmagic doesn't detect them properly
+        mimetype = _mmagic_modern_img_format(magic_bits) or mimetype
     if not mimetype.startswith("image/"):
         raise InvalidMimeType(mimetype, "image/*")
 

@@ -105,13 +105,28 @@ class RoleActor(Document):
 
 
 # Default roles for each show.
-DEFAULT_ROLES = [
+DEFAULT_ROLES_SHOWS = [
     RoleStatus(key="TL", name="Translator"),
     RoleStatus(key="TLC", name="Translation Checker"),
     RoleStatus(key="ENC", name="Encoder"),
     RoleStatus(key="ED", name="Editor"),
     RoleStatus(key="TS", name="Typesetter"),
     RoleStatus(key="TM", name="Timer"),
+    RoleStatus(key="QC", name="Quality Checker"),
+]
+DEFAULT_ROLES_MANGA = [
+    RoleStatus(key="TL", name="Translator"),
+    RoleStatus(key="CL", name="Cleaner"),
+    RoleStatus(key="RD", name="Redrawer"),
+    RoleStatus(key="PR", name="Proofreader"),
+    RoleStatus(key="TS", name="Typesetter"),
+    RoleStatus(key="QC", name="Quality Checker"),
+]
+DEFAULT_ROLES_NOVEL = [
+    RoleStatus(key="TL", name="Translator"),
+    RoleStatus(key="TLC", name="Translation Checker"),
+    RoleStatus(key="ED", name="Editor"),
+    RoleStatus(key="PR", name="Proofreader"),
     RoleStatus(key="QC", name="Quality Checker"),
 ]
 
@@ -127,7 +142,7 @@ class EpisodeStatus(BaseModel):
     """Has the episode released?"""
     airing_at: Optional[float] = None
     """The unix timestamp of the airing time, if any."""
-    statuses: list[RoleStatus] = Field(default_factory=lambda: DEFAULT_ROLES)
+    statuses: list[RoleStatus] = Field(default_factory=lambda: DEFAULT_ROLES_SHOWS)
     """The statuses of each role."""
     delay_reason: Optional[str] = None
     """The reason for the delay, if any."""

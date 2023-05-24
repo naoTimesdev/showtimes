@@ -108,8 +108,8 @@ async def handle_image_upload(file: Upload, uuid: str, image_type: str) -> Uploa
 
     # Upload file
     result = await stor.stream_upload(
-        key=image_type,
-        key_id=uuid,
+        base_key=image_type,
+        parent_id=uuid,
         filename=filename,
         data=file,
     )

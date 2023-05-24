@@ -20,7 +20,20 @@ import asyncio
 from dataclasses import dataclass
 from mimetypes import guess_type
 from pathlib import Path
-from typing import IO, Any, AsyncIterator, Coroutine, Optional, Protocol, Union, cast
+from typing import (
+    IO,
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Coroutine,
+    Optional,
+    Protocol,
+    Type,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import pendulum
 from aiobotocore.session import AioSession as BotocoreSession
@@ -71,7 +84,233 @@ async def _run_in_executor(func, *args, **kwargs):
     return await asyncio.get_event_loop().run_in_executor(None, func, *args, *kwargs_args)
 
 
-class LocalStorage:
+_StorT = TypeVar("_StorT", bound="Storage")
+T = TypeVar("T")
+MaybeFile: TypeAlias = Optional[FileObject]
+
+
+# Base class
+class Storage(Protocol):
+    """
+    Base class for all storage implementation.
+    """
+
+    async def start(self) -> Awaitable[None]:
+        """
+        Start the storage connection.
+
+        Any connection can be made here.
+        """
+        ...
+
+    def close(self) -> None:
+        """
+        Close the storage connection.
+
+        Connection cleanup can be made here.
+        """
+        ...
+
+    async def stat_file(
+        self: Type[_StorT],
+        base_key: str,
+        parent_id: str,
+        filename: str,
+        type: str = ...,
+    ) -> MaybeFile:
+        """
+        (Async) Get file information.
+
+        The path that will be accessed are like this:
+        - `{type}/{base_key}}/{parent_id}/{filename}`
+
+        Parameters
+        ----------
+        base_key: :class:`str`
+            The base key or path for the file.
+        parent_id: :class:`str`
+            The parent ID for the file. (User or Group ID or something similar)
+        filename: :class:`str`
+            The filename for the file.
+        type: :class:`str`
+            The type of the file that we want to access.
+            Basically the base folder for the storage.
+
+        Returns
+        -------
+        MaybeFile
+            The file information if exists, else None.
+        """
+        ...
+
+    async def exists(
+        self,
+        base_key: str,
+        parent_id: str,
+        filename: str,
+        type: str = ...,
+    ) -> bool:
+        """
+        (Async) Check if the file exists.
+
+        The path that will be accessed are like this:
+        - `{type}/{base_key}}/{parent_id}/{filename}`
+
+        This calls :method:`stat_file` under the hood.
+
+        Parameters
+        ----------
+        base_key: :class:`str`
+            The base key or path for the file.
+        parent_id: :class:`str`
+            The parent ID for the file. (User or Group ID or something similar)
+        filename: :class:`str`
+            The filename for the file.
+        type: :class:`str`
+            The type of the file that we want to access.
+            Basically the base folder for the storage.
+
+        Returns
+        -------
+        bool
+            True if exists, else False.
+        """
+        ...
+
+    async def stream_upload(
+        self,
+        base_key: str,
+        parent_id: str,
+        filename: str,
+        data: StreamableData,
+        type: str = ...,
+    ) -> MaybeFile:
+        """
+        (Async) Upload a file, using data stream.
+
+        The path that will be accessed are like this:
+        - `{type}/{base_key}}/{parent_id}/{filename}`
+
+        Parameters
+        ----------
+        base_key: :class:`str`
+            The base key or path for the file.
+        parent_id: :class:`str`
+            The parent ID for the file. (User or Group ID or something similar)
+        filename: :class:`str`
+            The filename for the file.
+        data: :class:`StreamableData`
+            A class that implements :class:`StreamableData` protocol. Should contains
+            `.read()` and `.seek()` method, both can be async or not.
+        type: :class:`str`
+            The type of the file that we want to access.
+            Basically the base folder for the storage.
+
+        Returns
+        -------
+        MaybeFile
+            The uploaded file information, if success, else None.
+        """
+        ...
+
+    async def stream_download(
+        self,
+        base_key: str,
+        parent_id: str,
+        filename: str,
+        type: str = ...,
+    ) -> AsyncIterator[bytes]:
+        """
+        (Async) Download a file, using data stream.
+
+        The path that will be accessed are like this:
+        - `{type}/{base_key}}/{parent_id}/{filename}`
+
+        Parameters
+        ----------
+        base_key: :class:`str`
+            The base key or path for the file.
+        parent_id: :class:`str`
+            The parent ID for the file. (User or Group ID or something similar)
+        filename: :class:`str`
+            The filename for the file.
+        type: :class:`str`
+            The type of the file that we want to access.
+            Basically the base folder for the storage.
+
+        Returns
+        -------
+        AsyncIterator[bytes]
+            The file data stream, can be used in `async for` loop.
+        """
+        ...
+
+    async def download(
+        self,
+        base_key: str,
+        parent_id: str,
+        filename: str,
+        type: str = ...,
+    ) -> bytes:
+        """
+        (Async) Download a file.
+
+        The path that will be accessed are like this:
+        - `{type}/{base_key}}/{parent_id}/{filename}`
+
+        Parameters
+        ----------
+        base_key: :class:`str`
+            The base key or path for the file.
+        parent_id: :class:`str`
+            The parent ID for the file. (User or Group ID or something similar)
+        filename: :class:`str`
+            The filename for the file.
+        type: :class:`str`
+            The type of the file that we want to access.
+            Basically the base folder for the storage.
+
+        Returns
+        -------
+        bytes
+            The file data.
+        """
+        ...
+
+    async def delete(
+        self,
+        base_key: str,
+        parent_id: str,
+        filename: str,
+        type: str = ...,
+    ) -> None:
+        """
+        (Async) Delete a file.
+
+        The path that will be accessed are like this:
+        - `{type}/{base_key}}/{parent_id}/{filename}`
+
+        Parameters
+        ----------
+        base_key: :class:`str`
+            The base key or path for the file.
+        parent_id: :class:`str`
+            The parent ID for the file. (User or Group ID or something similar)
+        filename: :class:`str`
+            The filename for the file.
+        type: :class:`str`
+            The type of the file that we want to access.
+            Basically the base folder for the storage.
+
+        Returns
+        -------
+        None
+            Nothing.
+        """
+        ...
+
+
+class LocalStorage(Storage):
     def __init__(self, root_path: Union[Path, AsyncPath]):
         self.__base: AsyncPath = root_path if isinstance(root_path, AsyncPath) else AsyncPath(root_path)
         self._root: AsyncPath = self.__base / "storages"
@@ -85,22 +324,10 @@ class LocalStorage:
     def close(self):
         pass
 
-    async def stream_upload(self, key: str, key_id: str, filename: str, data: StreamableData, type: str = "images"):
+    async def stat_file(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
-        path = self._root / type / key / key_id.replace("-", "") / filename
-        await path.parent.mkdir(parents=True, exist_ok=True)
-        await _run_in_executor(data.seek, 0)
-        async with path.open("wb") as f:
-            read = await _run_in_executor(data.read, 1024)
-            if not read:
-                return
-            await f.write(read)
-        return await self.stat_file(key, key_id, filename, type)
-
-    async def stat_file(self, key: str, key_id: str, filename: str, type: str = "images"):
-        await self.start()
-        purepath = f"{type}/{key}/{key_id.replace('-', '')}/{filename}"
-        path = self._root / type / key / key_id.replace("-", "") / filename
+        purepath = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
+        path = self._root / type / base_key / parent_id.replace("-", "") / filename
         try:
             stat_data = await path.stat()
             guess_mime, _ = guess_type(filename)
@@ -114,13 +341,27 @@ class LocalStorage:
         except FileNotFoundError:
             return None
 
-    async def exists(self, key: str, key_id: str, filename: str, type: str = "images"):
+    async def exists(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
-        return await self.stat_file(key, key_id, filename, type) is not None
+        return await self.stat_file(base_key, parent_id, filename, type) is not None
 
-    async def stream_download(self, key: str, key_id: str, filename: str, type: str = "images"):
+    async def stream_upload(
+        self, base_key: str, parent_id: str, filename: str, data: StreamableData, type: str = "images"
+    ):
         await self.start()
-        path = self._root / type / key / key_id.replace("-", "") / filename
+        path = self._root / type / base_key / parent_id.replace("-", "") / filename
+        await path.parent.mkdir(parents=True, exist_ok=True)
+        await _run_in_executor(data.seek, 0)
+        async with path.open("wb") as f:
+            read = await _run_in_executor(data.read, 1024)
+            if not read:
+                return
+            await f.write(read)
+        return await self.stat_file(base_key, parent_id, filename, type)
+
+    async def stream_download(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
+        await self.start()
+        path = self._root / type / base_key / parent_id.replace("-", "") / filename
         async with path.open("rb") as f:
             while True:
                 chunk = await f.read(1024)
@@ -128,19 +369,19 @@ class LocalStorage:
                     break
                 yield chunk
 
-    async def download(self, key: str, key_id: str, filename: str, type: str = "images"):
+    async def download(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
-        path = self._root / type / key / key_id.replace("-", "") / filename
+        path = self._root / type / base_key / parent_id.replace("-", "") / filename
         async with path.open("rb") as f:
             return await f.read()
 
-    async def delete(self, key: str, key_id: str, filename: str, type: str = "images"):
+    async def delete(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
-        path = self._root / type / key / key_id.replace("-", "") / filename
+        path = self._root / type / base_key / parent_id.replace("-", "") / filename
         await path.unlink(missing_ok=True)
 
 
-class S3Storage:
+class S3Storage(Storage):
     _client: Optional[S3Client]
 
     def __init__(
@@ -175,19 +416,9 @@ class S3Storage:
         if self._client is not None:
             await self._client.close()
 
-    async def stream_upload(self, key: str, key_id: str, filename: str, data: StreamableData, type: str = "images"):
+    async def stat_file(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
-        path = f"{type}/{key}/{key_id.replace('-', '')}/{filename}"
-        if self._client is None:
-            raise RuntimeError("Client not started")
-        async with self._client as client:
-            client: S3Client
-            await client.put_object(Bucket=self.__bucket, Key=path, Body=cast(IO[bytes], data))
-            return await self.stat_file(key, key_id, filename, type)
-
-    async def stat_file(self, key: str, key_id: str, filename: str, type: str = "images"):
-        await self.start()
-        path = f"{type}/{key}/{key_id.replace('-', '')}/{filename}"
+        path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
         async with self._client as client:
@@ -210,8 +441,8 @@ class S3Storage:
                 pendulum.instance(last_mod),
             )
 
-    async def exists(self, key: str, key_id: str, filename: str, type: str = "images"):
-        path = f"{type}/{key}/{key_id.replace('-', '')}/{filename}"
+    async def exists(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
+        path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
         async with self._client as client:
@@ -227,9 +458,23 @@ class S3Storage:
             except client.exceptions.NoSuchKey:
                 return False
 
-    async def stream_download(self, key: str, key_id: str, filename: str, type: str = "images") -> AsyncIterator[bytes]:
+    async def stream_upload(
+        self, base_key: str, parent_id: str, filename: str, data: StreamableData, type: str = "images"
+    ):
         await self.start()
-        path = f"{type}/{key}/{key_id.replace('-', '')}/{filename}"
+        path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
+        if self._client is None:
+            raise RuntimeError("Client not started")
+        async with self._client as client:
+            client: S3Client
+            await client.put_object(Bucket=self.__bucket, Key=path, Body=cast(IO[bytes], data))
+            return await self.stat_file(base_key, parent_id, filename, type)
+
+    async def stream_download(
+        self, base_key: str, parent_id: str, filename: str, type: str = "images"
+    ) -> AsyncIterator[bytes]:
+        await self.start()
+        path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
         async with self._client as client:
@@ -240,9 +485,11 @@ class S3Storage:
             except client.exceptions.NoSuchKey:
                 raise FileNotFoundError
 
-    async def download(self, key: str, key_id: str, filename: str, type: str = "images") -> Coroutine[Any, Any, bytes]:
+    async def download(
+        self, base_key: str, parent_id: str, filename: str, type: str = "images"
+    ) -> Coroutine[Any, Any, bytes]:
         await self.start()
-        path = f"{type}/{key}/{key_id.replace('-', '')}/{filename}"
+        path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
         async with self._client as client:
@@ -253,9 +500,9 @@ class S3Storage:
             except client.exceptions.NoSuchKey:
                 raise FileNotFoundError
 
-    async def delete(self, key: str, key_id: str, filename: str, type: str = "images"):
+    async def delete(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
-        path = f"{type}/{key}/{key_id.replace('-', '')}/{filename}"
+        path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
         async with self._client as client:
@@ -270,11 +517,11 @@ _LOCALSERVER: LocalStorage = LocalStorage(AsyncPath(ROOT_PATH / "storages"))
 _GLOBAL_S3SERVER: Optional[S3Storage] = None
 
 
-def get_local_storage():
+def get_local_storage() -> LocalStorage:
     return _LOCALSERVER
 
 
-def get_s3_storage():
+def get_s3_storage() -> S3Storage:
     global _GLOBAL_S3SERVER
 
     if _GLOBAL_S3SERVER is None:
@@ -298,7 +545,7 @@ async def init_s3_storage(
     _GLOBAL_S3SERVER = stor
 
 
-def get_storage():
+def get_storage() -> Storage:
     if _GLOBAL_S3SERVER is not None:
         return _GLOBAL_S3SERVER
     return _LOCALSERVER

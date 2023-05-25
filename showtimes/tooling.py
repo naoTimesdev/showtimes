@@ -187,50 +187,29 @@ def load_env(env_path: Path):
 def get_env_config(is_production: bool = True):
     """Get the configuration from multiple .env file!"""
     current_dir = Path(__file__).absolute().parent
-    backend_dir = current_dir.parent
-    root_dir = backend_dir.parent
-    frontend_dir = root_dir / "frontend"
+    root_dir = current_dir.parent
 
-    # .env file from every directory
     # variant: .env.local, .env.production, .env.development
     # load depends on the current environment (for production and development)
 
     APP_MODE = os.getenv("APP_MODE", "development")
     is_prod = APP_MODE == "production" or is_production
 
+    # .env
     env_root = load_env(root_dir / ".env")
-    env_front = load_env(frontend_dir / ".env")
-    env_back = load_env(backend_dir / ".env")
-
     # .env.local
     env_root_local = load_env(root_dir / ".env.local")
-    env_front_local = load_env(frontend_dir / ".env.local")
-    env_back_local = load_env(backend_dir / ".env.local")
-
     # .env.production
     env_root_prod = load_env(root_dir / ".env.production") if is_prod else {}
-    env_front_prod = load_env(frontend_dir / ".env.production") if is_prod else {}
-    env_back_prod = load_env(backend_dir / ".env.production") if is_prod else {}
-
     # .env.development
     env_root_dev = load_env(root_dir / ".env.development") if not is_prod else {}
-    env_front_dev = load_env(frontend_dir / ".env.development") if not is_prod else {}
-    env_back_dev = load_env(backend_dir / ".env.development") if not is_prod else {}
 
     # priority: .env.local > .env.production > .env.development > .env
     env_merged = {
         **env_root,
-        **env_front,
-        **env_back,
         **env_root_local,
-        **env_front_local,
-        **env_back_local,
         **env_root_prod,
-        **env_front_prod,
-        **env_back_prod,
         **env_root_dev,
-        **env_front_dev,
-        **env_back_dev,
     }
     return env_merged
 

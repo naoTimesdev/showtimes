@@ -27,6 +27,17 @@ from ..utils import make_uuid
 from ._doc import _coerce_to_pendulum, pendulum_utc
 
 
+class ImageMetadata(BaseModel):
+    """
+    The user avatar image.
+    """
+
+    key: str = ""
+    """The key of the image"""
+    format: str = ""
+    """The format of the image"""
+
+
 class DefaultIntegrationType:
     """
     A simple class to hold the default integration type.
@@ -311,6 +322,7 @@ class ShowtimesLegacyUser(BaseModel):
     """
 
     user_id: str
+    migrated: bool = False
 
 
 class ShowtimesUser(Document):
@@ -330,6 +342,8 @@ class ShowtimesUser(Document):
     """Discord OAuth2 information"""
     legacy_info: Optional[ShowtimesLegacyUser] = None
     """Legacy user informaton"""
+    avatar: Optional[ImageMetadata] = None
+    """Avatar of the user"""
 
     user_id: UUID = Field(default_factory=make_uuid)
 

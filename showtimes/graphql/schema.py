@@ -16,14 +16,19 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import Optional, Type, TypedDict
+from typing import Type, TypedDict, Union, cast
 from uuid import UUID
 
 import strawberry as gql
 from strawberry.file_uploads import Upload
+from strawberry.types import Info
 
+from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
+
+from .models import Result, UserGQL
+from .mutations import mutate_login_user
 
 __all__ = ("make_schema",)
 
@@ -34,20 +39,46 @@ class _SchemaParam(TypedDict):
     subscription: Type | None
 
 
-@gql.type(description="Simple result of mutation")
-class Result:
-    success: bool = gql.field(description="Success status")
-    message: Optional[str] = gql.field(description="Extra message if any, might be available if success is False")
-
-
 @gql.type
 class Query:
-    ...
+    @gql.field(description="Get the current user")
+    async def user(self, info: Info[SessionQLContext, None]) -> UserGQL | None:
+        if info.context.user is None:
+            raise Exception("You are not logged in")
+        # return info.context.user
+        ...
+
+    @gql.field(description="Get the current or requested server")
+    async def server(self, info: Info[SessionQLContext, None], id: UUID | None = gql.UNSET) -> UserGQL | Result:
+        if info.context.user is None:
+            raise Exception("You are not logged in")
+
+        if id is not None:
+            ...  # Check if user is in server
+
+        if id is None and info.context.user.active is not None:
+            # Get active server
+            ...
+
+        return Result(
+            success=False,
+            message="You must specify a server ID or set an active server by `mutation { activeServer }`",
+        )
 
 
 @gql.type
 class Mutation:
-    ...
+    @gql.mutation(description="Login to Showtimes")
+    async def login_user(self, email: str, password: str, info: Info[SessionQLContext, None]) -> Union[UserGQL, Result]:
+        if info.context.user is not None:
+            return Result(success=False, message="You are already logged in")
+        success, user = await mutate_login_user(email, password)
+        if not success and isinstance(user, str):
+            return Result(success=False, message=user)
+        user_info = cast(UserGQL, user)
+        info.context.session_latch = True
+        info.context.user = user_info.to_session()
+        return user_info
 
 
 @gql.type

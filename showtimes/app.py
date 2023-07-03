@@ -20,7 +20,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Request, WebSocket
 from fastapi.datastructures import Default
-from fastapi.responses import RedirectResponse
 
 from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
@@ -152,7 +151,7 @@ async def exceptions_handler_session_error(_: Request, exc: SessionError):
     return ResponseType(error=exc.detail, code=status_code).to_orjson(status_code)
 
 
-async def context_handler_gql_session(request: Request | None = None, websocket: WebSocket | None = None):
+async def context_handler_gql_session(request: Request, websocket: WebSocket):
     if request is None and websocket is None:
         raise ValueError("Either request or websocket must be provided")
     session = get_session_handler()
@@ -207,6 +206,7 @@ def create_app():
     # --> GraphQL Router
     logger.info("Preparing GraphQL router...")
     graphql_router = SessionGraphQLRouter(
+        path="/graphql",
         schema=make_schema(),
         context_getter=context_gql_handler,
     )
@@ -219,8 +219,8 @@ def create_app():
     # <--
 
     @app.get("/", include_in_schema=False)
-    async def root_api_redirect():
-        return RedirectResponse(url="/docs")
+    async def _root_api_redirect():
+        return ORJSONXResponse(content={"status": "ok"})
 
     logger.info("Backend app created!")
     return app

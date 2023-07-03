@@ -149,7 +149,7 @@ class RedisBackend(SessionBackend):
         port: int = 6379,
         password: Optional[str] = None,
         *,
-        key_prefix: str = "kidofood:session:",
+        key_prefix: str = "showtimes:naotimes:session:",
     ):
         """Initialize a new redis database."""
         self._client = RedisDatabase(host, port, password)

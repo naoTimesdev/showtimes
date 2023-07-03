@@ -44,7 +44,7 @@ class ShowtimesDatabase:
         self,
         ip_hostname_or_url: str,
         port: int = 27017,
-        dbname: str = "kidofood",
+        dbname: str = "showtimesdb",
         auth_string: Optional[str] = None,
         auth_source: str = "admin",
         tls: bool = False,

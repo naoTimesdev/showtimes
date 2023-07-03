@@ -158,8 +158,8 @@ def create_session_handler(
         secure = os.getenv("NODE_ENV") == "production"
         cookie_params = CookieParameters(max_age=max_age, secure=secure)
         _GLOBAL_SESSION_HANDLER = SessionHandler(
-            cookie_name="kidofood|session",
-            identifier="kidofood|ident",
+            cookie_name="naotimes|session",
+            identifier="naotimes|ident",
             secret_key=secret_key,
             params=cookie_params,
             backend=backend,

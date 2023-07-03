@@ -85,7 +85,7 @@ class RedisDatabase:
             kwargs["password"] = self._pass
         self._pool = aioredis.ConnectionPool.from_url(**kwargs)
         self._conn = aioredis.Redis(connection_pool=self._pool)
-        self.logger = logging.getLogger("KidoFood.Redis")
+        self.logger = logging.getLogger("Showtimes.Controllers.Redis")
         self._is_connected = False
 
         self._need_execution = []

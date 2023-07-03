@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from mimetypes import guess_extension
+from typing import cast
 
 import magic
 from fastapi import UploadFile
@@ -95,7 +96,7 @@ async def handle_image_upload(file: Upload, uuid: str, image_type: str) -> Uploa
     stor = get_storage()
     mimetype = await get_file_mimetype(file)
     if mimetype == "application/octet-stream":
-        magic_bits = await file.read(16)
+        magic_bits = await cast(UploadFile, file).read(16)
         # Special way to detect AVIF/HEIF/HEIC/JXL
         # Seems like libmagic doesn't detect them properly
         mimetype = _mmagic_modern_img_format(magic_bits) or mimetype

@@ -110,10 +110,10 @@ class GraphQLClient(Generic[ResultT]):
         if session is None:
             self._outside_session = False
 
-    def _convert_data(self, data: Optional[ResultT]):
+    def _convert_data(self, data: Optional[ResultT]) -> Optional[ResultT]:
         if data is None:
             return None
-        return AttributeDict(data)
+        return cast(ResultT, AttributeDict(data))
 
     async def query(
         self, query: str, variables: dict = {}, operation_name: Optional[str] = None

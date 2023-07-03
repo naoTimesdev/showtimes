@@ -75,7 +75,7 @@ async def app_on_startup(run_production: bool = True):
         shdb = ShowtimesDatabase(
             DB_HOST,
             try_int(DB_PORT) or 27017,
-            DB_NAME or "kidofood",
+            DB_NAME or "showtimesdb",
             DB_AUTH_STRING,
             DB_AUTH_SOURCE or "admin",
             DB_AUTH_TLS,

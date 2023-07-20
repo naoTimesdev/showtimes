@@ -7,7 +7,7 @@ The complete API of Showtimes Backend Project.
 :license: AGPL-3.0, see LICENSE for more details.
 """
 
-from . import controllers, extensions, graphql, models
+from . import controllers, extensions, graphql, models, routes
 from ._metadata import *
 from .app import *
 from .tooling import *

@@ -1,12 +1,10 @@
 """
-showtimes.extensions.fastapi
+showtimes.controllers.oauth2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-FastAPI extra codes and features.
+The OAuth2 handlers of Showtimes Backend Project.
 
 :copyright: (c) 2022-present naoTimes Project
 :license: AGPL-3.0, see LICENSE for more details.
 """
 
-from .discovery import *
-from .errors import *
-from .responses import *
+from .discord import *

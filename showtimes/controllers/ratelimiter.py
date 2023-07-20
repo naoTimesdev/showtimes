@@ -61,7 +61,7 @@ class NetworkRateLimiter:
     @next_reset.setter
     def next_reset(self, value: float | int | str) -> None:
         if isinstance(value, (float, int)):
-            self.__next_reset = value
+            self.__next_reset = float(value)
         elif isinstance(value, str):
             val: int | float | None = None
             try:
@@ -72,7 +72,7 @@ class NetworkRateLimiter:
                 except ValueError:
                     pass
             if val is not None:
-                self.__next_reset = val
+                self.__next_reset = float(val)
 
     @remaining.setter
     def remaining(self, value: int | str) -> None:

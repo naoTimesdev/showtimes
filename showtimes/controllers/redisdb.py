@@ -26,7 +26,11 @@ import orjson
 from bson import ObjectId
 from redis import asyncio as aioredis
 
-__all__ = ("RedisDatabase",)
+__all__ = (
+    "RedisDatabase",
+    "init_redis_client",
+    "get_redis",
+)
 
 
 def ObjectIdEncoder(obj: Any):  # noqa: N802
@@ -69,21 +73,18 @@ class RedisDatabase:
     """
 
     def __init__(
-        self, host: str, port: int, password: Optional[str] = None, loop: Optional[asyncio.AbstractEventLoop] = None
+        self, host: str, port: int, password: Optional[str] = None, *, loop: Optional[asyncio.AbstractEventLoop] = None
     ):
-        if loop is None:
-            self._loop = asyncio.get_event_loop()
-        else:
-            self._loop = loop
+        self._loop = loop or asyncio.get_event_loop()
         self._host = host
         self._port = port
         self._pass = password
 
         address = f"redis://{self._host}:{self._port}"
-        kwargs = {"url": address}
+        kwargs = {}
         if self._pass is not None:
             kwargs["password"] = self._pass
-        self._pool = aioredis.ConnectionPool.from_url(**kwargs)
+        self._pool = aioredis.ConnectionPool.from_url(url=address, **kwargs)
         self._conn = aioredis.Redis(connection_pool=self._pool)
         self.logger = logging.getLogger("Showtimes.Controllers.Redis")
         self._is_connected = False
@@ -409,3 +410,32 @@ class RedisDatabase:
             await self.rm(key)
 
     bulkdelete = bulkrm
+
+
+_REDIS_CLIENT: RedisDatabase | None = None
+
+
+async def init_redis_client(
+    redis_host: str,
+    redis_port: int = 6379,
+    redis_password: str | None = None,
+):
+    global _REDIS_CLIENT
+
+    if _REDIS_CLIENT is None:
+        client = RedisDatabase(
+            host=redis_host,
+            port=redis_port,
+            password=redis_password,
+        )
+        await client.connect()
+        _REDIS_CLIENT = client
+
+
+def get_redis() -> RedisDatabase:
+    global _REDIS_CLIENT
+
+    if _REDIS_CLIENT is None:
+        raise RuntimeError("Redis client is not initialized!")
+
+    return _REDIS_CLIENT

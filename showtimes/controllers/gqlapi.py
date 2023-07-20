@@ -169,8 +169,8 @@ class GraphQLClient(Generic[ResultT]):
         """Execute the predicate function and return the result"""
         real_func = cast(PredicateFunc, getattr(predicate, "func", predicate))
         if asyncio.iscoroutinefunction(real_func):
-            return await real_func(content)
-        return cast(PredicateSyncFunc, real_func)(content)  # type guard not working properly
+            return await cast(PredicateAwaitFunc, real_func)(content)
+        return cast(PredicateSyncFunc, real_func)(content)
 
     async def paginate(
         self, query: str, predicate: PredicateFunc, variables: dict | None = None, operation_name: Optional[str] = None

@@ -7,7 +7,7 @@ The controllers of Showtimes Backend Project.
 :license: AGPL-3.0, see LICENSE for more details.
 """
 
-from . import sessions
+from . import oauth2, sessions
 from .anilist import *
 from .claim import *
 from .database import *

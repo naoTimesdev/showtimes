@@ -20,17 +20,19 @@ import functools
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, FastAPI, Request, WebSocket
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.datastructures import Default
 from strawberry.exceptions import StrawberryGraphQLError
 
 from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
+from showtimes.controllers.redisdb import get_redis, init_redis_client
 from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.sessions.errors import SessionError
 from showtimes.controllers.sessions.handler import check_session, create_session_handler, get_session_handler
 from showtimes.controllers.storages import S3Storage, get_s3_storage, init_s3_storage
 from showtimes.extensions.fastapi.discovery import discover_routes
+from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.extensions.fastapi.responses import ORJSONXResponse, ResponseType
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.router import SessionGraphQLRouter
@@ -113,6 +115,9 @@ async def app_on_startup(run_production: bool = True):
     REDIS_PASS = env_config.get("REDIS_PASS")
     if SECRET_KEY == DEFAULT_KEY:
         logger.warning("Using default secret key, please change it later since it's not secure!")
+    logger.info("Connecting to redis session backend...")
+    await init_redis_client(REDIS_HOST or "localhost", try_int(REDIS_PORT) or 6379, REDIS_PASS)
+    logger.info("Connected to redis session backend!")
     SESSION_MAX_AGE = int(env_config.get("SESSION_MAX_AGE") or 7 * 24 * 60 * 60)
     logger.info(f"Creating session handler with max age of {SESSION_MAX_AGE} seconds...")
     await create_session_handler(SECRET_KEY, REDIS_HOST, try_int(REDIS_PORT) or 6379, REDIS_PASS, SESSION_MAX_AGE)
@@ -131,11 +136,14 @@ async def app_on_startup(run_production: bool = True):
 async def app_on_shutdown():
     logger = get_root_logger()
     logger.info("Shutting down backend...")
-    # logger.info("Closed storage connection!")
-    # pubsub = get_pubsub()
-    # logger.info("Closing pubsub connection...")
-    # await pubsub.close()
-    # logger.info("Closed pubsub connection!")
+
+    try:
+        redis_client = get_redis()
+        logger.info("Closing Redis client instances...")
+        await redis_client.close()
+        logger.info("Closed Redis client instances!")
+    except RuntimeError:
+        pass
 
     try:
         logger.info("Closing redis session backend...")
@@ -157,21 +165,21 @@ async def app_on_shutdown():
         logger.info("Closed S3 storage!")
 
     try:
-        meili_search = get_searcher()
+        redis_client = get_searcher()
         logger.info("Closing Meilisearch client instances...")
-        await meili_search.close()
+        await redis_client.close()
         logger.info("Closed Meilisearch client instances!")
     except RuntimeError:
         pass
 
 
-def make_graphql_session_error_response(exc: SessionError):
+def make_graphql_error_response(exc: HTTPException, error_message: str, error_type: str):
     status_code = exc.status_code
     if status_code < 400:
         status_code = 403
     fmt_error = StrawberryGraphQLError(
-        "Unable to authorize session, see extensions for more info",
-        extensions={"type": "SESSION_ERROR", "code": status_code, "detail": exc.detail},
+        error_message,
+        extensions={"type": error_type, "code": status_code, "detail": exc.detail},
     ).formatted
 
     return ORJSONXResponse(content={"errors": [fmt_error], "data": None}, status_code=status_code)
@@ -179,7 +187,18 @@ def make_graphql_session_error_response(exc: SessionError):
 
 async def exceptions_handler_session_error(req: Request, exc: SessionError):
     if "graphql" in req.url.path:
-        return make_graphql_session_error_response(exc)
+        return make_graphql_error_response(
+            exc, "Unable to authorize session, see extensions for more info", "SESSION_ERROR"
+        )
+    status_code = exc.status_code
+    if status_code < 400:
+        status_code = 403
+    return ResponseType(error=exc.detail, code=status_code).to_orjson(status_code)
+
+
+async def exceptions_handler_showtimes_error(req: Request, exc: ShowtimesException):
+    if "graphql" in req.url.path:
+        return make_graphql_error_response(exc, "Unable to process request", "SHOWTIMES_EXCEPTION")
     status_code = exc.status_code
     if status_code < 400:
         status_code = 403
@@ -229,6 +248,7 @@ def create_app():
     app.router.add_event_handler("startup", functools.partial(app_on_startup, run_production=not run_dev))
     app.router.add_event_handler("shutdown", app_on_shutdown)
     app.add_exception_handler(SessionError, exceptions_handler_session_error)
+    app.add_exception_handler(ShowtimesException, exceptions_handler_showtimes_error)
 
     # --> Router API
     logger.info("Discovering routes...")

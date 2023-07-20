@@ -328,6 +328,8 @@ class ShowtimesUser(Document):
     """The privilege of the user."""
     password: Optional[str] = None
     """Hashed password, ARGON2ID"""
+    name: Optional[str] = None
+    """The full name of the user."""
     discord_meta: Optional[ShowtimesUserDiscord] = None
     """Discord OAuth2 information"""
     avatar: Optional[ImageMetadata] = None

@@ -39,11 +39,7 @@ async def mutate_login_user(
     if not user:
         return False, "User with associated email not found"
     if user.password is None:
-        if user.legacy_info is None:
-            return False, "User has no password set"
-        if not user.legacy_info.migrated:
-            return False, "Please migrate your account first"
-        return False, "User has no password set (migrated account)"
+        return False, "User has no password set!"
 
     is_verify, new_password = await verify_password(password, user.password)
     if not is_verify:

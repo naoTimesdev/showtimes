@@ -114,7 +114,7 @@ async def app_on_startup(run_production: bool = True):
         logger.warning("Using default secret key, please change it later since it's not secure!")
     SESSION_MAX_AGE = int(env_config.get("SESSION_MAX_AGE") or 7 * 24 * 60 * 60)
     logger.info(f"Creating session handler with max age of {SESSION_MAX_AGE} seconds...")
-    create_session_handler(SECRET_KEY, REDIS_HOST, try_int(REDIS_PORT) or 6379, REDIS_PASS, SESSION_MAX_AGE)
+    await create_session_handler(SECRET_KEY, REDIS_HOST, try_int(REDIS_PORT) or 6379, REDIS_PASS, SESSION_MAX_AGE)
     logger.info("Session created!")
 
     logger.info("Creating Meilisearch client instances...")

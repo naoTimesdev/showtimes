@@ -21,11 +21,11 @@ from typing import Optional
 from uuid import UUID
 
 # import strawberry as gql
-from beanie import Document, Insert, Link, Replace, SaveChanges, Update, before_event
+from beanie import BackLink, Document, Insert, Link, Replace, SaveChanges, Update, before_event
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
-from ..utils import make_uuid
+from ..utils import generate_custom_code, make_uuid
 from ._doc import _coerce_to_pendulum, pendulum_utc
 
 
@@ -333,11 +333,12 @@ class ShowtimesUser(Document):
     """Discord OAuth2 information"""
     avatar: Optional[ImageMetadata] = None
     """Avatar of the user"""
+    api_key: Optional[str] = None
+    """Authentication API key"""
+    servers: list[BackLink["ShowtimesServer"]] = Field(original_field="owners")
+    """Associated servers"""
 
     user_id: UUID = Field(default_factory=make_uuid)
-
-    def should_migrate(self) -> bool:
-        return self.legacy_info is not None
 
     @before_event(Insert, Replace, Update, SaveChanges)
     def make_sure(self):
@@ -346,6 +347,22 @@ class ShowtimesUser(Document):
 
     class Settings:
         name = "ShowtimesUsers"
+        use_state_management = True
+
+
+class ShowtimesUserRegister(BaseModel):
+    """
+    A temporary model to hold the register information.
+    """
+
+    username: str
+    password: str
+
+    approval_code: str = Field(default_factory=lambda: generate_custom_code(16, True, True))
+    user_id: UUID = Field(default_factory=make_uuid)
+
+    class Settings:
+        name = "ShowtimesUserRegister"
         use_state_management = True
 
 

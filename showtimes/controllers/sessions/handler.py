@@ -26,7 +26,9 @@ from fastapi.openapi.models import APIKey, APIKeyIn
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel
 
+from showtimes.models.database import ShowtimesUser
 from showtimes.models.session import UserSession
+from showtimes.tooling import get_env_config
 
 from .backend import InMemoryBackend, RedisBackend, SessionBackend
 from .errors import SessionError
@@ -83,6 +85,9 @@ class SessionHandler:
         if response is not None:
             self.set_cookie(response, data.session_id)
 
+    async def set_api_session(self, data: UserSession):
+        await self.backend.create(f"{self.identifier}|api|{data.user_id}", data)
+
     def set_cookie(self, response: Response, session_id: UUID):
         dumps = self.signer.dumps(session_id.hex)
         if isinstance(dumps, bytes):
@@ -100,7 +105,7 @@ class SessionHandler:
 
     async def remove_session(self, session_id: Union[str, UUID], response: Optional[Response] = None):
         as_uuid = UUID(session_id) if isinstance(session_id, str) else session_id
-        await self.backend.delete(as_uuid)
+        await self.backend.delete(session_id=as_uuid)
         if response is not None:
             self.remove_cookie(response)
 
@@ -122,6 +127,23 @@ class SessionHandler:
         return self._identifier
 
     async def __call__(self, request: Union[Request, WebSocket]):
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Token "):
+            auth_header = auth_header[6:]
+            master_key = get_env_config()["MASTER_KEY"]
+            if auth_header == master_key:
+                return _MASTER_SESSION
+
+            session_auth = await self.backend.read(f"{self.identifier}|api|{auth_header}")
+            if session_auth:
+                return session_auth
+            user_with_key = await ShowtimesUser.find_one(ShowtimesUser.api_key == auth_header)
+            if user_with_key is None:
+                raise SessionError(detail="Unknown API key", status_code=401)
+            user_session = UserSession.from_db(user_with_key, [], is_api_key=True)
+            await self.set_api_session(user_session)
+            return user_session
+
         signed_session = request.cookies.get(self.model.name)
         if not signed_session:
             raise SessionError(detail="No session found", status_code=403)
@@ -138,9 +160,10 @@ class SessionHandler:
 
 
 _GLOBAL_SESSION_HANDLER: Optional[SessionHandler] = None
+_MASTER_SESSION = UserSession.create_master()
 
 
-def create_session_handler(
+async def create_session_handler(
     secret_key: str,
     redis_host: Optional[str] = None,
     redis_port: int = 6379,
@@ -157,13 +180,15 @@ def create_session_handler(
     if _GLOBAL_SESSION_HANDLER is None:
         secure = os.getenv("NODE_ENV") == "production"
         cookie_params = CookieParameters(max_age=max_age, secure=secure)
-        _GLOBAL_SESSION_HANDLER = SessionHandler(
+        session = SessionHandler(
             cookie_name="naotimes|session",
             identifier="naotimes|ident",
             secret_key=secret_key,
             params=cookie_params,
             backend=backend,
         )
+        await session.set_api_session(_MASTER_SESSION)
+        _GLOBAL_SESSION_HANDLER = session
 
 
 def get_session_handler() -> SessionHandler:

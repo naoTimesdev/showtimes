@@ -44,7 +44,7 @@ class SessionBackend(ABC):
         pass
 
     @abstractmethod
-    async def create(self, session_id: UUID, data: UserSession) -> None:
+    async def create(self, session_id: UUID | str, data: UserSession) -> None:
         """
         Create new session data on the backend.
 
@@ -63,7 +63,7 @@ class SessionBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def read(self, session_id: UUID) -> Optional[UserSession]:
+    async def read(self, session_id: UUID | str) -> Optional[UserSession]:
         """
         Read or fetch session data from the backend.
 

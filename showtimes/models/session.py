@@ -54,9 +54,12 @@ class UserSession(BaseModel):
     object_id: str  # ObjectId, stringified
     discord_meta: ShowtimesUserDiscord | None = None
     active: ServerSessionInfo | None = None
+    api_key: bool = False
 
     @classmethod
-    def from_db(cls: Type["UserSession"], user: ShowtimesUser, servers: list[ShowtimesServer]):
+    def from_db(
+        cls: Type["UserSession"], user: ShowtimesUser, servers: list[ShowtimesServer], is_api_key: bool = False
+    ):
         return cls(
             session_id=make_uuid(),
             user_id=str(user.user_id),
@@ -66,4 +69,17 @@ class UserSession(BaseModel):
             object_id=str(user.id),
             discord_meta=user.discord_meta,
             active=None,
+            api_key=is_api_key,
+        )
+
+    @classmethod
+    def create_master(cls: Type["UserSession"]):
+        return cls(
+            session_id=make_uuid(),
+            user_id="-999MASTER",
+            username="Master API",
+            privilege=UserType.ADMIN,
+            object_id="-999",
+            servers=[],
+            api_key=True,
         )

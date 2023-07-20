@@ -171,7 +171,7 @@ class ShowtimesUISchema(Document):
         name = "showtimesuilogin"
 
     class Config:
-        fields = {"user_id": "id", "id": "_id"}
+        fields: dict[str, str] = {"user_id": "id", "id": "_id"}  # noqa: RUF012
 
 
 def int_or_none(value: str | float | int | None) -> int | None:
@@ -548,13 +548,9 @@ class Forward:
             if user.user_type is ShowUIUserType.DISCORD:
                 ssuser = newdb.ShowtimesUser(
                     username=user.user_id,
-                    password=await encrypt_password(f"legacyuser_{user.user_id}"),
+                    password=await encrypt_password(user.secret),
                     privilege=newdb.UserType.ADMIN if user.privilege is ShowUIPrivilege.ADMIN else newdb.UserType.USER,
                     discord_meta=disc_meta,
-                    integrations=[newdb.IntegrationId(id=user.user_id, type=newdb.DefaultIntegrationType.DiscordUser)],
-                    legacy_info=newdb.ShowtimesLegacyUser(
-                        user_id=user.user_id,
-                    ),
                 )
                 if user.user_id in added_users:
                     # We have added this before using the legacy user data

@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 from base64 import b64decode, b64encode
 from typing import Optional, TypeAlias
 
@@ -54,8 +56,8 @@ def parse_cursor(cursor: Optional[Cursor]) -> Optional[ObjectId]:
     dec_cursor = _decode_cursor(cursor)
     try:
         return ObjectId(dec_cursor)
-    except (TypeError, InvalidId):
-        raise InvalidCursor(cursor)
+    except (TypeError, InvalidId) as exc:
+        raise InvalidCursor(cursor) from exc
 
 
 def to_cursor(obj_id: Optional[ObjectId]) -> Optional[Cursor]:

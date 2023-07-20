@@ -405,7 +405,7 @@ class S3Storage(Storage):
     async def start(self):
         if self._client is None:
             self._client = self._session.create_client(
-                "s3",
+                "s3",  # type: ignore
                 region_name=self.__region,
                 endpoint_url=self.__host,
                 aws_access_key_id=self.__key,
@@ -482,12 +482,10 @@ class S3Storage(Storage):
                 resp = await client.get_object(Bucket=self.__bucket, Key=path)
                 async with resp["Body"] as stream:
                     yield await stream.read(1024)
-            except client.exceptions.NoSuchKey:
-                raise FileNotFoundError
+            except client.exceptions.NoSuchKey as exc:
+                raise FileNotFoundError from exc
 
-    async def download(
-        self, base_key: str, parent_id: str, filename: str, type: str = "images"
-    ) -> Coroutine[Any, Any, bytes]:
+    async def download(self, base_key: str, parent_id: str, filename: str, type: str = "images") -> bytes:
         await self.start()
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
@@ -497,8 +495,8 @@ class S3Storage(Storage):
                 resp = await client.get_object(Bucket=self.__bucket, Key=path)
                 async with resp["Body"] as stream:
                     return await stream.read()
-            except client.exceptions.NoSuchKey:
-                raise FileNotFoundError
+            except client.exceptions.NoSuchKey as exc:
+                raise FileNotFoundError from exc
 
     async def delete(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()

@@ -1,31 +1,23 @@
 {
-    "python.linting.flake8Enabled": true,
-    "python.linting.flake8Args": [
-        "--config=.flake8"
-    ],
     "[python]": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.codeActionsOnSave": {
+            "source.fixAll": false,
+            "source.organizeImports": true
+        }
     },
-    "npm.packageManager": "pnpm",
+    "ruff.args": ["--config=pyproject.toml"],
+    "ruff.organizeImports": true,
+    "editor.rulers": [120],
     "python.formatting.provider": "none",
-    "python.formatting.blackArgs": [
-        "--config=pyproject.toml"
-    ],
     "python.analysis.diagnosticMode": "workspace",
-    "python.linting.enabled": true,
-    "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.autoImportCompletions": true,
-    "isort.check": false,
-    "isort.importStrategy": "useBundled",
-    "isort.args": [
-        "--settings-path=pyproject.toml"
-    ],
     "python.languageServer": "Pylance",
     "autoDocstring.docstringFormat": "numpy",
-    "tailwindCSS.emmetCompletions": true,
-    "autoDocstring.includeName": true,
-    "autoDocstring.startOnNewLine": true,
+    "python.linting.enabled": true,
+    "python.linting.flake8Enabled": false,
+    "python.linting.pylintEnabled": false,
+    "python.analysis.typeCheckingMode": "basic",
     "files.exclude": {
         "**/.git": true,
         "**/.svn": true,
@@ -36,5 +28,14 @@
         "**/.venv": true,
         "**/__pycache__": true,
         "**/node_modules": true,
-    }
+        "**/.qt_for_python": true,
+        "**/.pytest_cache": true,
+        "**/.mypy_cache": true,
+        "**/.ruff_cache": true
+    },
+    "black-formatter.importStrategy": "fromEnvironment",
+    "black-formatter.args": [
+        "--config",
+        "pyproject.toml"
+    ]
 }

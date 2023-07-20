@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 import functools
 import os
 from pathlib import Path
@@ -129,8 +131,8 @@ async def app_on_shutdown():
         session_handler = get_session_handler()
         await session_handler.backend.shutdown()
         logger.info("Closed redis session backend!")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("Failed to close redis session backend: %s", exc, exc_info=exc)
 
     stor_s3: S3Storage | None = None
     try:

@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from functools import partial as ftpartial
 from typing import ForwardRef, get_args

@@ -36,7 +36,8 @@ def get_argon2() -> PasswordHasher:
     return _ARGON2_HASHER
 
 
-async def encrypt_password(password: str | bytes, *, loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()):
+async def encrypt_password(password: str | bytes, *, loop: asyncio.AbstractEventLoop | None = None):
+    loop = loop or asyncio.get_event_loop()
     if not isinstance(password, bytes):
         password = password.encode("utf-8")
 
@@ -45,12 +46,17 @@ async def encrypt_password(password: str | bytes, *, loop: asyncio.AbstractEvent
 
 
 async def verify_password(
-    password: str, hashed_password: str, *, loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+    password: str,
+    hashed_password: str,
+    *,
+    loop: asyncio.AbstractEventLoop | None = None,
 ) -> tuple[bool, Optional[str]]:
     """
     Verify the password with hashed argon2 password.
     Return a tuple of (is_verified, new_hashed_password)
     """
+
+    loop = loop or asyncio.get_event_loop()
 
     try:
         is_correct = await loop.run_in_executor(None, get_argon2().verify, hashed_password, password)

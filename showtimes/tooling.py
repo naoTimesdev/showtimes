@@ -52,15 +52,15 @@ class RollingFileHandler(RotatingFileHandler):
     At startup, we check the last file in the directory and start from there.
     """
 
-    maxBytes: int  # to force mypy to stop complaining????
+    maxBytes: int  # noqa: N815
     gunzip: bool
 
     def __init__(
         self,
         filename: os.PathLike,
         mode: str = "a",
-        maxBytes: int = 0,  # noqa
-        backupCount: int = 0,
+        maxBytes: int = 0,  # noqa: N803
+        backupCount: int = 0,  # noqa: N803
         encoding: Optional[str] = None,
         delay: bool = False,
         gunzip: bool = True,
@@ -96,7 +96,7 @@ class RollingFileHandler(RotatingFileHandler):
 
     def _safe_gunzip(self, source: str, dest: str):
         try:
-            with open(source, "rb") as sf:
+            with Path(source).open("rb") as sf:
                 with gzip.open(dest + ".gz", "wb") as df:
                     for line in sf:
                         df.write(line)
@@ -107,7 +107,7 @@ class RollingFileHandler(RotatingFileHandler):
 
     def _safe_rename(self, source: str, dest: str):
         try:
-            os.rename(source, dest)
+            Path(source).rename(dest)
             return True
         except Exception as exc:
             logger.error("Failed to rename %s to %s: %s", source, dest, str(exc), exc_info=exc)
@@ -115,7 +115,7 @@ class RollingFileHandler(RotatingFileHandler):
 
     def _safe_remove(self, source: str):
         try:
-            os.remove(source)
+            Path(source).unlink(missing_ok=True)
             return True
         except Exception as exc:
             logger.error("Failed to remove %s: %s", source, str(exc), exc_info=exc)
@@ -123,7 +123,7 @@ class RollingFileHandler(RotatingFileHandler):
 
     def rotator(self, source: str, dest: str) -> None:
         # Override the rotator to gzip the file before moving it
-        if not os.path.exists(source):
+        if not Path(source).exists():
             return  # silently fails
         if self.gunzip:
             # Try to gzip the file
@@ -146,7 +146,7 @@ def setup_logger(log_path: Path):
     logging.basicConfig(
         level=logging.DEBUG,
         handlers=[file_handler],
-        format="[%(asctime)s] - (%(name)s)[%(levelname)s](%(funcName)s): %(message)s",  # noqa: E501
+        format="[%(asctime)s] - (%(name)s)[%(levelname)s](%(funcName)s): %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     logger = logging.getLogger()

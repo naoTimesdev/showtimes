@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import traceback
@@ -86,7 +88,7 @@ class GraphQLError:
 class GraphQLResult(Generic[ResultT]):
     query: str
     headers: "CIMultiDictProxy[str]"
-    operationName: Optional[str] = None
+    operationName: Optional[str] = None  # noqa: N815
     data: Optional[ResultT] = None
     errors: Optional[List[GraphQLError]] = None
     httpcode: Optional[int] = None
@@ -94,8 +96,8 @@ class GraphQLResult(Generic[ResultT]):
 
 @dataclass
 class GraphQLPaginationInfo:
-    hasMore: bool = False
-    nextCursor: Optional[Any] = None
+    hasMore: bool = False  # noqa: N815
+    nextCursor: Optional[Any] = None  # noqa: N815
 
 
 class GraphQLClient(Generic[ResultT]):
@@ -116,7 +118,7 @@ class GraphQLClient(Generic[ResultT]):
         return cast(ResultT, AttributeDict(data))
 
     async def query(
-        self, query: str, variables: dict = {}, operation_name: Optional[str] = None
+        self, query: str, variables: dict | None = None, operation_name: Optional[str] = None
     ) -> GraphQLResult[ResultT]:
         """Send query to the GraphQL API and get the result
         :param query: The query
@@ -128,6 +130,8 @@ class GraphQLClient(Generic[ResultT]):
         :return: The request result
         :rtype: GraphQLResult
         """
+        if variables is None:
+            variables = dict()
         query_send: GraphQLQueryParam = {"query": query}
         if len(variables.keys()) > 0:
             query_send["variables"] = variables
@@ -169,8 +173,10 @@ class GraphQLClient(Generic[ResultT]):
         return cast(PredicateSyncFunc, real_func)(content)  # type guard not working properly
 
     async def paginate(
-        self, query: str, predicate: PredicateFunc, variables: dict = {}, operation_name: Optional[str] = None
+        self, query: str, predicate: PredicateFunc, variables: dict | None = None, operation_name: Optional[str] = None
     ) -> AsyncGenerator[Tuple[GraphQLResult[ResultT], GraphQLPaginationInfo], None]:
+        if variables is None:
+            variables = {}
         has_more, next_cursor, cursor_var = await self._execute_predicate(predicate, None)
         has_more = True
         while has_more:

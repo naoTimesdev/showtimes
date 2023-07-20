@@ -69,7 +69,7 @@ class ResponseType(GenericModel, Generic[DataType]):
         )
 
     class Config:
-        schema_extra = {
+        schema_extra = {  # noqa: RUF012
             "example": {
                 "data": None,
                 "error": "Success",

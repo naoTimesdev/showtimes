@@ -1,3 +1,19 @@
+"""
+This file is part of Showtimes Backend Project.
+Copyright 2022-present naoTimes Project <https://github.com/naoTimesdev/showtimes>.
+
+Showtimes is free software: you can redistribute it and/or modify it under the terms of the
+Affero GNU General Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version.
+
+Showtimes is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the Affero GNU General Public License for more details.
+
+You should have received a copy of the Affero GNU General Public License along with Showtimes.
+If not, see <https://www.gnu.org/licenses/>.
+"""
+
 import subprocess as sp
 import sys
 from pathlib import Path
@@ -18,7 +34,7 @@ def check_license_header(file: Path) -> bool:
                     return True
                 return True
             else:
-                if line.startswith("This file is part of Showtimes Backend Project"):
+                if line.startswith("This file is part of Showtimes"):
                     return True
     return False
 
@@ -51,13 +67,15 @@ script_path = selected_venv_dir / "Scripts" if sys.platform == "win32" else sele
 print(f"[*] Running tests at {current_path}")
 
 print("[*] Running isort test...")
-isort_res = sp.Popen([script_path / "isort", "-c"] + to_be_linted).wait()
-print("[*] Running flake8 test...")
-flake8_res = sp.Popen(
-    [script_path / "flake8", "--statistics", "--show-source", "--benchmark", "--tee"] + to_be_linted
+isort_res = sp.Popen(
+    [script_path / "isort", "-c", *to_be_linted],
 ).wait()
+print("[*] Running ruff test...")
+ruff_res = sp.Popen([script_path / "ruff", "check", "--statistics", "--show-fixes", *to_be_linted]).wait()
+print("[*] Running black test...")
+black_res = sp.Popen([script_path / "black", "--check", *to_be_linted]).wait()
 
-results = [(isort_res, "isort"), (flake8_res, "flake8")]
+results = [(isort_res, "isort"), (ruff_res, "ruff"), (black_res, "black")]
 any_error = False
 
 for res in results:
@@ -68,7 +86,7 @@ for res in results:
         print(f"[+] {res[1]} passed")
 
 
-print("[*] Running license check and future annotations test...")
+print("[*] Running license check test...")
 any_license_error = False
 folder_to_check: list[Path] = []
 for folder in to_be_linted:

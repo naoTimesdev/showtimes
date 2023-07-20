@@ -128,8 +128,8 @@ class SessionHandler:
 
         try:
             session = UUID(self.signer.loads(signed_session, max_age=self.params.max_age, return_timestamp=False))
-        except (SignatureExpired, BadSignature):
-            raise SessionError(detail="Session expired/invalid", status_code=401)
+        except (SignatureExpired, BadSignature) as exc:
+            raise SessionError(detail="Session expired/invalid", status_code=401) from exc
 
         session_data = await self.backend.read(session)
         if not session_data:

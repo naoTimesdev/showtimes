@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 from enum import Enum
 from typing import Optional
 from uuid import UUID
@@ -49,6 +51,7 @@ class DefaultIntegrationType:
     FansubDB = "FANSUBDB_ID"
     FansubDBProject = "FANSUBDB_PROJECT_ID"
     FansubDBAnime = "FANSUBDB_ANIME_ID"
+    ShowtimesUser = "SHOWTIMES_USER"
 
 
 class IntegrationId(BaseModel):
@@ -315,16 +318,6 @@ class ShowtimesUserDiscord(BaseModel):
     expires_at: float
 
 
-class ShowtimesLegacyUser(BaseModel):
-    """
-    The legacy information, if exist
-    force user to migrate by themselves via Discord.
-    """
-
-    user_id: str
-    migrated: bool = False
-
-
 class ShowtimesUser(Document):
     """
     The user authentication and more.
@@ -336,12 +329,8 @@ class ShowtimesUser(Document):
     """The privilege of the user."""
     password: Optional[str] = None
     """Hashed password, ARGON2ID"""
-    integrations: list[IntegrationId] = Field(default_factory=list)
-    """Integrations of the user"""
     discord_meta: Optional[ShowtimesUserDiscord] = None
     """Discord OAuth2 information"""
-    legacy_info: Optional[ShowtimesLegacyUser] = None
-    """Legacy user informaton"""
     avatar: Optional[ImageMetadata] = None
     """Avatar of the user"""
 

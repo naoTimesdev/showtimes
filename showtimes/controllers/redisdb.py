@@ -114,7 +114,7 @@ class RedisDatabase:
         self.lock(key)
         try:
             yield
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         finally:
             self.unlock(key)

@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 from typing import Generic, Literal, Optional, TypeVar
 
 from .abstract import AttributeDict
@@ -52,7 +54,7 @@ class AnilistFuzzyDate(AttributeDict):
 class AnilistAiringScheduleNode(AttributeDict):
     id: int
     episode: int
-    airingAt: int
+    airingAt: int  # noqa: N815
 
 
 class AnilistAiringSchedules(AttributeDict):
@@ -62,7 +64,7 @@ class AnilistAiringSchedules(AttributeDict):
 class AnilistCoverImage(AttributeDict):
     medium: str
     large: str
-    extraLarge: Optional[str]
+    extraLarge: Optional[str]  # noqa: N815
     # Hexadecimal color code.
     color: str
 
@@ -77,14 +79,14 @@ class AnilistAnimeScheduleResult(AttributeDict):
     id: int
     format: AnilistFormat
     episodes: Optional[int]
-    startDate: AnilistFuzzyDate
-    airingSchedule: AnilistAiringSchedules
+    startDate: AnilistFuzzyDate  # noqa: N815
+    airingSchedule: AnilistAiringSchedules  # noqa: N815
 
 
 class AnilistAnimeInfoResult(AnilistAnimeScheduleResult):
-    idMal: Optional[int]
+    idMal: Optional[int]  # noqa: N815
     title: AnilistTitle
-    coverImage: AnilistCoverImage
+    coverImage: AnilistCoverImage  # noqa: N815
 
 
 class AnilistQueryMedia(AttributeDict, Generic[AT]):

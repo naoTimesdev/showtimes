@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 import random
 from string import ascii_lowercase, ascii_uppercase, digits
 from typing import Any, Optional, overload
@@ -157,7 +159,7 @@ def generate_custom_code(length: int = 8, include_numbers: bool = False, include
         letters_used += digits
     if include_uppercase:
         letters_used += ascii_uppercase
-    generated = "".join([random.choice(letters_used) for _ in range(length)])  # nosec
+    generated = "".join([random.choice(letters_used) for _ in range(length)])  # noqa: S311
     return generated
 
 

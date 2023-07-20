@@ -17,10 +17,9 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from dataclasses import Field, dataclass
-from datetime import datetime
 from typing import Any, ClassVar, Protocol, Type, TypeVar
 
-import tantivy
+import orjson
 
 __all__ = (
     "SchemaAble",
@@ -51,7 +50,7 @@ class SchemaAble:
     ```
     """
 
-    def to_schema(self: Type[_SchemaSupported]) -> tantivy.Schema:
+    def to_json(self: Type[_SchemaSupported]) -> bytes:
         """
         Transform a :class:`dataclass` object into a :class:`tantivy.Schema` object.
 
@@ -70,26 +69,8 @@ class SchemaAble:
         cls_name = self.__name__
         if not hasattr(self, "__dataclass_fields__"):
             raise ValueError(f"Unable to transform `{cls_name}` because it's not a `dataclass`-decorated class!")
-        dt_fields = self.__dataclass_fields__  # type: ignore
 
-        sbuilder = tantivy.SchemaBuilder()
-        for name, field in dt_fields.items():
-            ftype = field.type
-            if ftype == str:
-                sbuilder.add_text_field(name, stored=True, tokenizer_name="en_stem")
-            elif ftype == int:
-                sbuilder.add_unsigned_field(name, stored=True)
-            elif ftype == datetime:
-                sbuilder.add_date_field(name, stored=True)
-            elif ftype == bytes:
-                sbuilder.add_bytes_field(name)
-            elif ftype in (dict, list):  # TODO: Fix this
-                sbuilder.add_json_field(name, stored=True)
-            else:
-                raise TypeError(
-                    f"Unable to transform `{cls_name}` because `{name}` has an unsupported type `{ftype.__name__}`!"
-                )
-        return sbuilder.build()
+        return orjson.dumps(self)
 
 
 @dataclass
@@ -110,4 +91,3 @@ class ProjectSearch(SchemaAble):
 
 
 x = ProjectSearch("1", "2", "3", 4, 5, "6")
-print(x.to_schema())

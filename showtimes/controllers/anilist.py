@@ -14,6 +14,8 @@ You should have received a copy of the Affero GNU General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+from __future__ import annotations
+
 from math import ceil
 from typing import TYPE_CHECKING, Optional, cast
 
@@ -57,7 +59,9 @@ class AnilistAPI:
         if remaining is not None:
             self._limiter.remaining = remaining
 
-    async def handle(self, query: str, variables: dict = {}) -> GraphQLResult:  # type: ignore
+    async def handle(self, query: str, variables: dict | None = None) -> GraphQLResult:  # type: ignore
+        if variables is None:
+            variables = {}
         async for _ in self._limiter:
             requested = await self._requester.query(query, variables)
             self._handle_x_rate_headers(requested.headers)

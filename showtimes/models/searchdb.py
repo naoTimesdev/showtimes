@@ -25,6 +25,7 @@ __all__ = (
     "SchemaAble",
     "ServerSearch",
     "ProjectSearch",
+    "UserSearch",
 )
 
 
@@ -66,7 +67,7 @@ class SchemaAble:
         :exc:`TypeError`
             If the class has an unsupported type.
         """
-        cls_name = self.__name__
+        cls_name = self.__class__.__name__
         if not hasattr(self, "__dataclass_fields__"):
             raise ValueError(f"Unable to transform `{cls_name}` because it's not a `dataclass`-decorated class!")
 
@@ -88,11 +89,24 @@ class SchemaAble:
         :exc:`TypeError`
             If the class has an unsupported type.
         """
-        cls_name = self.__name__
+        cls_name = self.__class__.__name__
         if not hasattr(self, "__dataclass_fields__"):
             raise ValueError(f"Unable to transform `{cls_name}` because it's not a `dataclass`-decorated class!")
 
         return orjson.dumps(self)
+
+    def __init_subclass__(cls) -> None:
+        config = getattr(cls, "Config", None)
+
+        if config is None:
+            raise TypeError(f"Class `{cls.__name__}` must have a `Config` class!")
+
+        config_name = getattr(config, "index", None)
+        if not isinstance(config_name, str):
+            raise TypeError(f"Class `{cls.__name__}` must have a `index` attribute in `Config` class!")
+
+        if len(config_name) < 1:
+            raise ValueError(f"Class `{cls.__name__}` must have a `index` attribute in `Config` class!")
 
     class Config:
         index: str
@@ -105,7 +119,7 @@ class ServerSearch(SchemaAble):
     projects: list[str]
 
     class Config:
-        index = "server"
+        index = "servers"
 
 
 @dataclass
@@ -117,5 +131,22 @@ class ProjectSearch(SchemaAble):
     updated_at: int
     server_id: str
 
+    class Config:
+        index = "projects"
 
-x = ProjectSearch("1", "2", "3", 4, 5, "6")
+
+@dataclass
+class UserImageMetadata:
+    key: str
+    format: str
+
+
+@dataclass
+class UserSearch(SchemaAble):
+    id: str
+    username: str
+    name: str | None = None
+    avatar_url: UserImageMetadata | None = None
+
+    class Config:
+        index = "users"

@@ -25,6 +25,8 @@ python-dotenv = "^0.21.1"
 python-magic-bin = {version = "^0.4.14", platform = "win32"}
 python-magic = {version = "^0.4.27", platform = "linux"}
 aiobotocore = "^2.4.2"
+meilisearch-python-async = "^1.4.8"
+msgspec = "^0.17.0"
 
 [tool.poetry.group.dev.dependencies]
 isort = "^5.12.0"
@@ -98,7 +100,7 @@ ignore-decorators = ["typing.overload"]
 combine-as-imports = false
 split-on-trailing-comma = true
 required-imports = ["from __future__ import annotations"]
-known-first-party = ["tests", "tosho_mango"]
+known-first-party = ["tests", "showtimes"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.flake8-bugbear]

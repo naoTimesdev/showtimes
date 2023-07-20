@@ -14,5 +14,6 @@ from .database import *
 from .gqlapi import *
 from .ratelimiter import *
 from .redisdb import *
+from .searcher import *
 from .security import *
 from .storages import *

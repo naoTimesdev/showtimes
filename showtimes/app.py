@@ -25,6 +25,7 @@ from fastapi.datastructures import Default
 
 from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
+from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.sessions.errors import SessionError
 from showtimes.controllers.sessions.handler import check_session, create_session_handler, get_session_handler
 from showtimes.controllers.storages import S3Storage, get_s3_storage, init_s3_storage
@@ -116,6 +117,15 @@ async def app_on_startup(run_production: bool = True):
     create_session_handler(SECRET_KEY, REDIS_HOST, try_int(REDIS_PORT) or 6379, REDIS_PASS, SESSION_MAX_AGE)
     logger.info("Session created!")
 
+    logger.info("Creating Meilisearch client instances...")
+    MEILI_URL = env_config.get("MEILI_URL")
+    MEILI_API_KEY = env_config.get("MEILI_API_KEY")
+    if MEILI_URL is None or MEILI_API_KEY is None:
+        raise RuntimeError("No Meilisearch URL or API key specified")
+
+    await init_searcher(MEILI_URL, MEILI_API_KEY)
+    logger.info("Meilisearch client instances created!")
+
 
 async def app_on_shutdown():
     logger = get_root_logger()
@@ -144,6 +154,14 @@ async def app_on_shutdown():
         logger.info("Closing S3 storage...")
         await stor_s3.close()
         logger.info("Closed S3 storage!")
+
+    try:
+        meili_search = get_searcher()
+        logger.info("Closing Meilisearch client instances...")
+        await meili_search.close()
+        logger.info("Closed Meilisearch client instances!")
+    except RuntimeError:
+        pass
 
 
 async def exceptions_handler_session_error(_: Request, exc: SessionError):

@@ -50,14 +50,36 @@ class SchemaAble:
     ```
     """
 
-    def to_json(self: Type[_SchemaSupported]) -> bytes:
+    def to_dict(self: Type[_SchemaSupported]) -> dict[str, Any]:
         """
-        Transform a :class:`dataclass` object into a :class:`tantivy.Schema` object.
+        Transform a :class:`dataclass` object into a dictionary.
 
         Returns
         -------
-        :class:`tantivy.Schema`
+        :class:`dict[str, Any]`
             The schema object.
+
+        Raises
+        ------
+        :exc:`ValueError`
+            If the class is not a valid :class:`dataclass` object.
+        :exc:`TypeError`
+            If the class has an unsupported type.
+        """
+        cls_name = self.__name__
+        if not hasattr(self, "__dataclass_fields__"):
+            raise ValueError(f"Unable to transform `{cls_name}` because it's not a `dataclass`-decorated class!")
+
+        return orjson.loads(orjson.dumps(self))
+
+    def to_json(self: Type[_SchemaSupported]) -> bytes:
+        """
+        Transform a :class:`dataclass` object into a JSON bytes.
+
+        Returns
+        -------
+        :class:`bytes`
+            The JSON bytes.
 
         Raises
         ------
@@ -72,12 +94,18 @@ class SchemaAble:
 
         return orjson.dumps(self)
 
+    class Config:
+        index: str
+
 
 @dataclass
 class ServerSearch(SchemaAble):
     id: str
     name: str
     projects: list[str]
+
+    class Config:
+        index = "server"
 
 
 @dataclass

@@ -17,6 +17,7 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from dataclasses import Field, dataclass
+from inspect import isclass
 from typing import Any, ClassVar, Protocol, Type, TypeVar
 
 import orjson
@@ -98,15 +99,16 @@ class SchemaAble:
     def __init_subclass__(cls) -> None:
         config = getattr(cls, "Config", None)
 
-        if config is None:
-            raise TypeError(f"Class `{cls.__name__}` must have a `Config` class!")
+        # Check if config is a class
+        if not isclass(config):
+            raise TypeError(f"Class `{cls.__name__}` must have a `Config` inner class!")
 
         config_name = getattr(config, "index", None)
         if not isinstance(config_name, str):
-            raise TypeError(f"Class `{cls.__name__}` must have a `index` attribute in `Config` class!")
+            raise TypeError(f"Class `{cls.__name__}` must have a `index` attribute in `Config` inner class!")
 
         if len(config_name) < 1:
-            raise ValueError(f"Class `{cls.__name__}` must have a `index` attribute in `Config` class!")
+            raise ValueError(f"Class `{cls.__name__}` must have a `index` attribute in `Config` inner class!")
 
     class Config:
         index: str

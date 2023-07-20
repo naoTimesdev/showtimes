@@ -23,14 +23,17 @@ from uuid import UUID
 import strawberry as gql
 from beanie import PydanticObjectId
 
-from showtimes.models.database import ShowtimesUser, ShowtimesUserDiscord
+from showtimes.models.database import ShowtimesUser, ShowtimesUserDiscord, ShowtimesUserRegister
 from showtimes.models.session import UserSession
 from showtimes.utils import make_uuid
 
 from .common import ImageMetadataGQL, IntegrationGQL
 from .enums import UserTypeGQL
 
-__all__ = ("UserGQL",)
+__all__ = (
+    "UserGQL",
+    "UserRegisterGQL",
+)
 
 
 @dataclass
@@ -65,16 +68,10 @@ class UserGQL:
     """The user avatar information"""
 
     user_id: gql.Private[str]  # ObjectId
-    legacy_id: gql.Private[Optional[str]]  # ObjectId
     discord_meta: gql.Private[Optional[DiscordMetadata]]
 
     @classmethod
     def from_db(cls: Type[UserGQL], user: ShowtimesUser):
-        legacy_id = None
-        if user.legacy_info is not None:
-            legacy_id = str(user.legacy_info.user_id)
-            if user.legacy_info.migrated:
-                legacy_id = None
         discord_meta: Optional[DiscordMetadata] = None
         if user.discord_meta:
             discord_meta = DiscordMetadata(
@@ -90,7 +87,6 @@ class UserGQL:
             privilege=user.privilege,
             integrations=[IntegrationGQL.from_db(integration) for integration in user.integrations],
             avatar=ImageMetadataGQL.from_db(user.avatar, "users") if user.avatar else None,
-            legacy_id=legacy_id,
             user_id=str(cast(PydanticObjectId, user.id)),
             discord_meta=discord_meta,
         )
@@ -104,4 +100,25 @@ class UserGQL:
             servers=[],
             object_id=self.user_id,
             discord_meta=self.discord_meta.to_model() if self.discord_meta else None,
+        )
+
+
+@gql.type(name="UserRegister", description="The user registration information")
+class UserRegisterGQL:
+    id: UUID = gql.field(description="The user ID")
+    """The user ID"""
+    username: str = gql.field(description="The user's username")
+    """The user username"""
+    approval_code: str = gql.field(description="The user's approval code")
+    """The user approval code"""
+
+    user_id: gql.Private[str]  # ObjectId
+
+    @classmethod
+    def from_db(cls: Type[UserRegisterGQL], user: ShowtimesUserRegister):
+        return cls(
+            id=user.user_id,
+            username=user.username,
+            approval_code=user.approval_code,
+            user_id=str(cast(PydanticObjectId, user.id)),
         )

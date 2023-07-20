@@ -20,8 +20,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-# import strawberry as gql
-from beanie import BackLink, Document, Insert, Link, Replace, SaveChanges, Update, before_event
+from beanie import Document, Insert, Link, Replace, SaveChanges, Update, before_event
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
@@ -335,8 +334,6 @@ class ShowtimesUser(Document):
     """Avatar of the user"""
     api_key: Optional[str] = None
     """Authentication API key"""
-    servers: list[BackLink["ShowtimesServer"]] = Field(original_field="owners")
-    """Associated servers"""
 
     user_id: UUID = Field(default_factory=make_uuid)
 
@@ -350,7 +347,7 @@ class ShowtimesUser(Document):
         use_state_management = True
 
 
-class ShowtimesUserRegister(BaseModel):
+class ShowtimesUserRegister(Document):
     """
     A temporary model to hold the register information.
     """

@@ -23,12 +23,18 @@ import strawberry as gql
 from strawberry.file_uploads import Upload
 from strawberry.types import Info
 
+from showtimes.controllers.sessions.handler import is_master_session
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
 
-from .models import Result, UserGQL
-from .mutations import mutate_login_user
+from .models import Result, UserGQL, UserRegisterGQL
+from .mutations.users import (
+    mutate_login_user,
+    mutate_register_user,
+    mutate_register_user_approve,
+    mutate_reset_password,
+)
 
 __all__ = ("make_schema",)
 
@@ -69,10 +75,60 @@ class Query:
 @gql.type
 class Mutation:
     @gql.mutation(description="Login to Showtimes")
-    async def login_user(self, email: str, password: str, info: Info[SessionQLContext, None]) -> Union[UserGQL, Result]:
+    async def login(self, username: str, password: str, info: Info[SessionQLContext, None]) -> Union[UserGQL, Result]:
         if info.context.user is not None:
             return Result(success=False, message="You are already logged in")
-        success, user = await mutate_login_user(email, password)
+        success, user = await mutate_login_user(username, password)
+        if not success and isinstance(user, str):
+            return Result(success=False, message=user)
+        user_info = cast(UserGQL, user)
+        info.context.session_latch = True
+        info.context.user = user_info.to_session()
+        return user_info
+
+    @gql.mutation(description="Register to Showtimes")
+    async def register(
+        self, username: str, password: str, info: Info[SessionQLContext, None]
+    ) -> Union[UserRegisterGQL, Result]:
+        if info.context.user is not None:
+            return Result(success=False, message="You are already logged in")
+        success, user = await mutate_register_user(username, password)
+        if not success and isinstance(user, str):
+            return Result(success=False, message=user)
+        user_info = cast(UserRegisterGQL, user)
+        return user_info
+
+    @gql.mutation(description="Approve a user registration")
+    async def approve_register(
+        self, username: str, password: str, code: str, info: Info[SessionQLContext, None]
+    ) -> Union[UserGQL, Result]:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in")
+
+        if not is_master_session(info.context.user):
+            return Result(success=False, message="You are not allowed to approve a user registration")
+
+        success, user = await mutate_register_user_approve(username, password, code)
+        if not success and isinstance(user, str):
+            return Result(success=False, message=user)
+        user_info = cast(UserGQL, user)
+        return user_info
+
+    @gql.mutation(description="Logout from Showtimes")
+    async def logout(self, info: Info[SessionQLContext, None]) -> Result:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in")
+        info.context.session_latch = True
+        info.context.user = None
+        return Result(success=True, message=None)
+
+    @gql.mutation(description="Login to Showtimes")
+    async def reset_password(
+        self, old_password: str, new_password: str, info: Info[SessionQLContext, None]
+    ) -> Union[UserGQL, Result]:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in")
+        success, user = await mutate_reset_password(UUID(info.context.user.user_id), old_password, new_password)
         if not success and isinstance(user, str):
             return Result(success=False, message=user)
         user_info = cast(UserGQL, user)

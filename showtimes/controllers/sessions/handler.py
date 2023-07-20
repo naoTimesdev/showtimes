@@ -40,6 +40,7 @@ __all__ = (
     "create_session_handler",
     "get_session_handler",
     "check_session",
+    "is_master_session",
 )
 
 
@@ -203,3 +204,7 @@ def get_session_handler() -> SessionHandler:
 async def check_session(request: Union[Request, WebSocket]) -> UserSession:
     session_handler = get_session_handler()
     return await session_handler(request)
+
+
+def is_master_session(session: UserSession) -> bool:
+    return session.api_key and session.user_id == _MASTER_SESSION.user_id

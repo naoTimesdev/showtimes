@@ -22,6 +22,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Request, WebSocket
 from fastapi.datastructures import Default
+from strawberry.exceptions import StrawberryGraphQLError
 
 from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
@@ -164,7 +165,21 @@ async def app_on_shutdown():
         pass
 
 
-async def exceptions_handler_session_error(_: Request, exc: SessionError):
+def make_graphql_session_error_response(exc: SessionError):
+    status_code = exc.status_code
+    if status_code < 400:
+        status_code = 403
+    fmt_error = StrawberryGraphQLError(
+        "Unable to authorize session, see extensions for more info",
+        extensions={"type": "SESSION_ERROR", "code": status_code, "detail": exc.detail},
+    ).formatted
+
+    return ORJSONXResponse(content={"errors": [fmt_error], "data": None}, status_code=status_code)
+
+
+async def exceptions_handler_session_error(req: Request, exc: SessionError):
+    if "graphql" in req.url.path:
+        return make_graphql_session_error_response(exc)
     status_code = exc.status_code
     if status_code < 400:
         status_code = 403
@@ -203,9 +218,13 @@ def create_app():
             "url": "https://github.com/naoTimesdev/showtimes/blob/master/LICENSE",
         },
         contact={"url": "https://github.com/naoTimesdev/showtimes/"},
+        terms_of_service="https://naoti.me/terms",
     )
 
     run_dev = to_boolean(os.environ.get("DEVELOPMENT", "0"))
+    env_conf = get_env_config(not run_dev)
+    if not env_conf.get("MASTER_KEY"):
+        raise RuntimeError("No MASTER_KEY specified")
     logger.info(f"Running in {'development' if run_dev else 'production'} mode")
     app.router.add_event_handler("startup", functools.partial(app_on_startup, run_production=not run_dev))
     app.router.add_event_handler("shutdown", app_on_shutdown)

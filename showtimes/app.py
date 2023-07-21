@@ -33,6 +33,7 @@ from showtimes.controllers.sessions.handler import check_session, create_session
 from showtimes.controllers.storages import S3Storage, get_s3_storage, init_s3_storage
 from showtimes.extensions.fastapi.discovery import discover_routes
 from showtimes.extensions.fastapi.errors import ShowtimesException
+from showtimes.extensions.fastapi.lock import get_ready_status
 from showtimes.extensions.fastapi.responses import ORJSONXResponse, ResponseType
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.router import SessionGraphQLRouter
@@ -131,6 +132,8 @@ async def app_on_startup(run_production: bool = True):
 
     await init_searcher(MEILI_URL, MEILI_API_KEY)
     logger.info("Meilisearch client instances created!")
+    # Ready latch
+    get_ready_status().ready()
 
 
 async def app_on_shutdown():
@@ -216,17 +219,27 @@ async def context_handler_gql_session(request: Request, websocket: WebSocket):
         return SessionQLContext(session=session)
 
 
+def verify_server_ready():
+    ready_latch = get_ready_status()
+    if not ready_latch.is_ready():
+        raise ShowtimesException(503, "Server is not ready yet")
+
+
 async def context_gql_handler(
     custom_context=Depends(context_handler_gql_session),
 ):
+    verify_server_ready()
+
     claim_stat = get_claim_status()
     if not claim_stat.claimed:
-        raise RuntimeError("Server is not claimed")
+        raise ShowtimesException(503, "Server is not claimed yet")
     return custom_context
 
 
 def create_app():
     logger = get_root_logger()
+    # Initialize latch
+    get_ready_status().unready()
     logger.info("Creating backend app...")
     app = FastAPI(
         title="Showtimes API",
@@ -252,7 +265,7 @@ def create_app():
 
     # --> Router API
     logger.info("Discovering routes...")
-    api_router = APIRouter(prefix="/api")
+    api_router = APIRouter(dependencies=[Depends(verify_server_ready)])
 
     ORJSONXDefault = Default(ORJSONXResponse)
     routes_folder = CURRENT_DIR / "routes"
@@ -278,8 +291,9 @@ def create_app():
     # <--
 
     @app.get("/", include_in_schema=False)
-    async def _root_api_redirect():
-        return ORJSONXResponse(content={"status": "ok"})
+    async def _root_api_welcome():
+        ready = get_ready_status().is_ready()
+        return ORJSONXResponse(content={"status": "ok" if ready else "waiting"}, status_code=200 if ready else 503)
 
     logger.info("Backend app created!")
     return app

@@ -9,4 +9,5 @@ FastAPI extra codes and features.
 
 from .discovery import *
 from .errors import *
+from .lock import *
 from .responses import *

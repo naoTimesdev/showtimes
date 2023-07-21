@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import time
 from typing import TYPE_CHECKING, Optional
+from urllib.parse import ParseResult, parse_qs, urlparse
 
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -64,6 +65,21 @@ class ShowtimesDatabase:
             self._ip_hostname = self.__ip_hostname_or_url
             self._generate_url()
 
+        # Add &appname=Showtimes to the end of the URL
+        parsed = urlparse(self._url)
+        parsed_qs = parse_qs(parsed.query)
+        parsed_qs["appname"] = ["Showtimes"]
+        parsed_qs_str = "&".join("&".join([f"{k}={v}" for v in vals]) for k, vals in parsed_qs.items())
+        reparsed = ParseResult(
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            parsed_qs_str,
+            parsed.fragment,
+        )
+        self._url = reparsed.geturl()
+
         self._client: AgnosticClient = AsyncIOMotorClient(self._url)
         self._db: AgnosticDatabase = self._client[self._dbname]
 
@@ -84,7 +100,9 @@ class ShowtimesDatabase:
         self._url += "/"
         self._url += f"?authSource={self._auth_source}&readPreference=primary&directConnection=true"
         if self._tls:
-            self._url += "&retryWrites=true&w=majority"
+            self._url += "&retryWrites=true&w=majority&ssl=true"
+        else:
+            self._url += "&ssl=false"
 
     async def validate_connection(self):
         return await self._db.command({"ping": 1})  # type: ignore

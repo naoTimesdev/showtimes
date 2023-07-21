@@ -34,6 +34,7 @@ from showtimes.models.database import (
     ShowProject,
     ShowtimesServer,
     ShowtimesUser,
+    ShowtimesUserRegister,
 )
 
 __all__ = ("ShowtimesDatabase",)
@@ -110,5 +111,6 @@ class ShowtimesDatabase:
                 ShowProject,
                 ShowtimesServer,
                 ShowtimesUser,
-            ],  # type: ignore (complained badly)
+                ShowtimesUserRegister,
+            ],  # type: ignore
         )

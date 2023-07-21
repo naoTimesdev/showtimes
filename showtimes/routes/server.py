@@ -63,4 +63,4 @@ async def server_claim_post(claim_request: ServerClaimRequest):
 @router.get("/claim")
 def server_claim_get():
     claim_latch = get_claim_status()
-    return ResponseType(data=claim_latch.claimed)
+    return ResponseType(data=claim_latch.claimed).to_orjson()

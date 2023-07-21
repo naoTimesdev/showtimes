@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any, Generic, Optional, TypeVar
 
 import orjson
+from beanie import PydanticObjectId
 from bson import ObjectId
 from fastapi.responses import JSONResponse
 from pendulum.datetime import DateTime
@@ -28,6 +29,7 @@ from pydantic.generics import GenericModel
 DataType = TypeVar("DataType")
 
 __all__ = (
+    "ORJsonEncoder",
     "ORJSONXResponse",
     "ResponseType",
 )
@@ -38,7 +40,7 @@ def ORJsonEncoder(obj: Any):  # noqa: N802
         return obj.for_json()
     if isinstance(obj, Time):
         return obj.for_json()
-    if isinstance(obj, ObjectId):
+    if isinstance(obj, (ObjectId, PydanticObjectId)):
         return str(obj)
     raise TypeError
 

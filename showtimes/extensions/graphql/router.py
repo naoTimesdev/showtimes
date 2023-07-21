@@ -17,19 +17,16 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
+import orjson
 from fastapi import Request, Response
-from fastapi.responses import PlainTextResponse
-from starlette import status
-from strawberry.exceptions import MissingQueryError
+from strawberry import UNSET
 from strawberry.fastapi import GraphQLRouter
-from strawberry.http import parse_request_data
-from strawberry.schema.exceptions import InvalidOperationTypeError
-from strawberry.types.graphql import OperationType
+from strawberry.http import GraphQLHTTPResponse
 
 from showtimes.controllers.sessions import SessionError
-from showtimes.extensions.fastapi import ORJSONXResponse
+from showtimes.extensions.fastapi.responses import ORJsonEncoder
 from showtimes.models.session import UserSession
 
 from .context import SessionQLContext
@@ -40,49 +37,22 @@ logger = logging.getLogger("GraphQL.Router")
 
 
 class SessionGraphQLRouter(GraphQLRouter):
-    async def execute_request(
-        self, request: Request, response: Response, data: dict, context: SessionQLContext, root_value
-    ) -> Response:
-        try:
-            request_data = parse_request_data(data)
-        except MissingQueryError:
-            missing_query_response = PlainTextResponse(
-                "No GraphQL query found in the request",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-            return self._merge_responses(response, missing_query_response)
-
-        method = request.method
-        allowed_operation_types = OperationType.from_http(method)
-
-        if not self.allow_queries_via_get and method == "GET":
-            allowed_operation_types = allowed_operation_types - {OperationType.QUERY}
-
-        try:
-            result = await self.execute(
-                request_data.query,
-                variables=request_data.variables,
-                context=context,
-                operation_name=request_data.operation_name,
-                root_value=root_value,
-                allowed_operation_types=allowed_operation_types,
-            )
-        except InvalidOperationTypeError as e:
-            return PlainTextResponse(
-                e.as_http_error_reason(method),
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        response_data = await self.process_result(request, result)
-
+    def encode_json(self, response_data: GraphQLHTTPResponse) -> str:
         # <-- Extension: Change response to ORJSONXResponse
-        actual_response: ORJSONXResponse = ORJSONXResponse(
+        return orjson.dumps(
             response_data,
-            status_code=status.HTTP_200_OK,
-        )
+            option=orjson.OPT_NON_STR_KEYS | orjson.OPT_SERIALIZE_NUMPY,
+            default=ORJsonEncoder,
+        ).decode("utf-8")
         # -->
+
+    async def run(
+        self, request: Request, context: SessionQLContext | None = UNSET, root_value: Any | None = UNSET
+    ) -> Response:
+        response = await super().run(request, context, root_value)
+
         # <-- Extension: Add session updater using latch
-        if context.session_latch:
+        if isinstance(context, SessionQLContext) and context.session_latch:
             logger.info("Updating session because of latch is True")
             if context.user is None:
                 cr_user: Optional[UserSession] = None
@@ -93,9 +63,9 @@ class SessionGraphQLRouter(GraphQLRouter):
                     pass
                     # Delete user session
                 if cr_user is not None:
-                    await context.session.remove_session(cr_user.session_id, actual_response)
+                    await context.session.remove_session(cr_user.session_id, response)
             else:
-                await context.session.set_session(context.user, actual_response)
+                await context.session.set_session(context.user, response)
         # -->
 
-        return self._merge_responses(response, actual_response)
+        return response

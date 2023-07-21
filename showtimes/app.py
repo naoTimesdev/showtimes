@@ -20,7 +20,7 @@ import functools
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, WebSocket
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.datastructures import Default
 from strawberry.exceptions import StrawberryGraphQLError
 
@@ -208,15 +208,24 @@ async def exceptions_handler_showtimes_error(req: Request, exc: ShowtimesExcepti
     return ResponseType(error=exc.detail, code=status_code).to_orjson(status_code)
 
 
-async def context_handler_gql_session(request: Request, websocket: WebSocket):
+async def context_handler_gql_session(
+    background_tasks: BackgroundTasks,
+    request: Request = None,  # type: ignore
+    websocket: WebSocket = None,  # type: ignore
+):
     if request is None and websocket is None:
-        raise ValueError("Either request or websocket must be provided")
+        raise ShowtimesException(500, "Unable to get request/websocket context")
     session = get_session_handler()
+    context = SessionQLContext(session=session)
+    context.request = request or websocket
+    context.background_tasks = background_tasks
+
     try:
         user = await check_session(request or websocket)  # type: ignore
-        return SessionQLContext(session=session, user=user)
-    except Exception:
-        return SessionQLContext(session=session)
+        context.user = user
+    except Exception:  # noqa: S110
+        pass
+    return context
 
 
 def verify_server_ready():
@@ -226,14 +235,14 @@ def verify_server_ready():
 
 
 async def context_gql_handler(
-    custom_context=Depends(context_handler_gql_session),
+    request_context=Depends(context_handler_gql_session),
 ):
     verify_server_ready()
 
     claim_stat = get_claim_status()
     if not claim_stat.claimed:
         raise ShowtimesException(503, "Server is not claimed yet")
-    return custom_context
+    return request_context
 
 
 def create_app():

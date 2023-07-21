@@ -7,32 +7,33 @@ license = "AGPL-3.0"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-fastapi = "^0.88.0"
-redis = {extras = ["hiredis"], version = "^4.5.1"}
-strawberry-graphql = {extras = ["fastapi"], version = "^0.151.3"}
-motor = "3.1.1"
+fastapi = "0.100.0"
+redis = {extras = ["hiredis"], version = "4.6.0"}
+strawberry-graphql = {extras = ["fastapi"], version = "0.195.2"}
+motor = "3.2.0"
 beanie = "1.20.0"
-itsdangerous = "^2.1.2"
-orjson = "^3.8.6"
-websockets = "^10.4"
-coloredlogs = "^15.0.1"
-pendulum = "^2.1.2"
-aiopath = "^0.6.11"
-argon2-cffi = "^21.3.0"
-psutil = "^5.9.4"
-aiohttp = "^3.8.4"
-python-dotenv = "^0.21.1"
-python-magic-bin = {version = "^0.4.14", platform = "win32"}
-python-magic = {version = "^0.4.27", platform = "linux"}
-aiobotocore = "^2.4.2"
-meilisearch-python-async = "^1.4.8"
-msgspec = "^0.17.0"
+itsdangerous = "2.1.2"
+orjson = "3.9.2"
+websockets = "11.0.3"
+coloredlogs = "15.0.1"
+pendulum = "2.1.2"
+aiopath = "0.6.11"
+argon2-cffi = "21.3.0"
+psutil = "5.9.5"
+aiohttp = "3.8.5"
+python-dotenv = "1.0.0"
+python-magic-bin = {version = "0.4.14", platform = "win32"}
+python-magic = {version = "0.4.27", platform = "linux"}
+aiobotocore = "2.5.2"
+meilisearch-python-async = "1.4.8"
+msgspec = "0.17.0"
+pydantic = "1.10.11"  # pin to v1 since beanie doesn't support v2 yet
 
 [tool.poetry.group.dev.dependencies]
 isort = "^5.12.0"
-black = "^22.12.0"
-uvicorn = "^0.20.0"
-types-aiobotocore = {extras = ["essential"], version = "^2.4.2"}
+black = "^23.7.0"
+uvicorn = "^0.23.1"
+types-aiobotocore = {extras = ["essential"], version = "^2.5.2"}
 pytest = "^7.4.0"
 pytest-cov = "^4.1.0"
 typing-extensions = "^4.7.1"
@@ -141,7 +142,7 @@ skip_gitignore = false
 combine_as_imports = false
 
 [tool.pyright]
-include = ["showtimes", "pipelines", "routes", "app.py"]
+include = ["showtimes", "pipelines", "app.py"]
 exclude = ["venv", "env", "node_modules", ".venv", ".env", ".nox", ".pytest_cache", ".mypy_cache", ".tox", "build", "dist", "_build", "**/__pycache__"]
 ignore = ["_testing"]
 stubPath = "./stubs"

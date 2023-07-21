@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, overload
 
 import coloredlogs
-from dotenv.main import DotEnv
+from dotenv import dotenv_values
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 __all__ = (
     "RollingFileHandler",
     "setup_logger",
-    "load_env",
     "get_env_config",
     "get_logger",
 )
@@ -171,19 +170,6 @@ def setup_logger(log_path: Path):
     return logger
 
 
-def load_env(env_path: Path):
-    """Load an environment file and set it to the environment table
-
-    Returns the environment dict loaded from the dictionary.
-    """
-    if not env_path.exists():
-        return {}
-    env = DotEnv(env_path, stream=None, verbose=False, encoding="utf-8", interpolate=True, override=True)
-    env.set_as_environment_variables()
-
-    return env.dict()
-
-
 def get_env_config(is_production: bool = True):
     """Get the configuration from multiple .env file!"""
     current_dir = Path(__file__).absolute().parent
@@ -196,13 +182,13 @@ def get_env_config(is_production: bool = True):
     is_prod = APP_MODE == "production" or is_production
 
     # .env
-    env_root = load_env(root_dir / ".env")
+    env_root = dotenv_values(root_dir / ".env")
     # .env.local
-    env_root_local = load_env(root_dir / ".env.local")
+    env_root_local = dotenv_values(root_dir / ".env.local")
     # .env.production
-    env_root_prod = load_env(root_dir / ".env.production") if is_prod else {}
+    env_root_prod = dotenv_values(root_dir / ".env.production") if is_prod else {}
     # .env.development
-    env_root_dev = load_env(root_dir / ".env.development") if not is_prod else {}
+    env_root_dev = dotenv_values(root_dir / ".env.development") if not is_prod else {}
 
     # priority: .env.local > .env.production > .env.development > .env
     env_merged = {

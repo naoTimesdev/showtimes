@@ -28,7 +28,11 @@ from showtimes.models.database import ShowtimesUser, UserType
 from ..extensions.fastapi.responses import ORJSONXResponse, ResponseType
 
 __all__ = ("router",)
-router = APIRouter(prefix="/server", default_response_class=Default(ORJSONXResponse))
+router = APIRouter(
+    prefix="/server",
+    default_response_class=Default(ORJSONXResponse),
+    tags=["Servers"],
+)
 
 
 @dataclass

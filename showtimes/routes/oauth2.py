@@ -41,7 +41,11 @@ from showtimes.utils import generate_custom_code
 from ..extensions.fastapi.responses import ORJSONXResponse
 
 __all__ = ("router",)
-router = APIRouter(prefix="/oauth2", default_response_class=Default(ORJSONXResponse))
+router = APIRouter(
+    prefix="/oauth2",
+    default_response_class=Default(ORJSONXResponse),
+    tags=["OAuth2"],
+)
 env_conf = get_env_config()
 
 DISCORD_ID = env_conf.get("DISCORD_CLIENT_ID")
@@ -60,7 +64,7 @@ discord_router = APIRouter(
 )
 
 
-@discord_router.get("/authorize")
+@discord_router.get("/authorize", response_class=RedirectResponse, status_code=302)
 async def oauth2_discord_authorize(base_url: str, redirect_url: str):
     redis = get_redis()
     redirect_url = unquote(redirect_url)
@@ -69,7 +73,7 @@ async def oauth2_discord_authorize(base_url: str, redirect_url: str):
         base_url = base_url[:-1]
 
     state_jacking = generate_custom_code(16, True)
-    scopes = ["identify", "email", "guilds"]
+    scopes = ["identify", "email", "guilds", "guilds.members.read"]
 
     params = {
         "client_id": cast(str, DISCORD_ID),
@@ -80,19 +84,21 @@ async def oauth2_discord_authorize(base_url: str, redirect_url: str):
         "state": state_jacking,
     }
 
-    await redis.set(
+    success = await redis.set(
         f"showtimes:oauth2:discord:state:{state_jacking}",
         {
             **params,
             "final_redirect": redirect_url,
         },
     )
+    if not success:
+        raise ShowtimesException(500, "Failed to create state parameter.")
 
     encoded_params = "&".join([f"{k}={quote(v)}" for k, v in params.items()])
     return RedirectResponse(f"https://discord.com/oauth2/authorize?{encoded_params}", 302)
 
 
-@discord_router.get("/exchange")
+@discord_router.get("/exchange", response_class=RedirectResponse, status_code=302)
 async def oauth2_discord_token_exchange(code: str, state: str):
     redis = get_redis()
 

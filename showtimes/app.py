@@ -97,7 +97,7 @@ async def app_on_startup(run_production: bool = True):
     await claim_latch.set_from_db()
     logger.info(f"Server claim status: {claim_latch.claimed}")
 
-    S3_HOST = env_config.get("S3_HOST")
+    S3_ENDPOINT = env_config.get("S3_ENDPOINT")
     S3_KEY = env_config.get("S3_ACCESS_KEY")
     S3_SECRET = env_config.get("S3_SECRET_KEY")
     S3_REGION = env_config.get("S3_REGION")
@@ -105,7 +105,7 @@ async def app_on_startup(run_production: bool = True):
 
     if S3_SECRET is not None and S3_KEY is not None and S3_BUCKET is not None:
         logger.info("Initializing S3 storage...")
-        await init_s3_storage(S3_BUCKET, S3_KEY, S3_SECRET, S3_REGION, host=S3_HOST)
+        await init_s3_storage(S3_BUCKET, S3_KEY, S3_SECRET, S3_REGION, endpoint=S3_ENDPOINT)
         logger.info("S3 storage initialized!")
 
     logger.info("Creating session...")
@@ -115,7 +115,7 @@ async def app_on_startup(run_production: bool = True):
     REDIS_PORT = env_config.get("REDIS_PORT")
     REDIS_PASS = env_config.get("REDIS_PASS")
     if SECRET_KEY == DEFAULT_KEY:
-        logger.warning("Using default secret key, please change it later since it's not secure!")
+        logger.warning("Using default SECRET_KEY, please change it later since it's not secure!")
     logger.info("Connecting to redis session backend...")
     await init_redis_client(REDIS_HOST or "localhost", try_int(REDIS_PORT) or 6379, REDIS_PASS)
     logger.info("Connected to redis session backend!")
@@ -287,7 +287,7 @@ def create_app():
     # --> Include Router
     logger.info("Binding routes...")
     app.include_router(api_router)
-    app.include_router(graphql_router)
+    app.include_router(graphql_router, tags=["GraphQL"])
     # <--
 
     @app.get("/", include_in_schema=False)

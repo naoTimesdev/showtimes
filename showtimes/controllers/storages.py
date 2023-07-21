@@ -41,6 +41,8 @@ from aiopath import AsyncPath
 from pendulum.datetime import DateTime
 from types_aiobotocore_s3 import S3Client
 
+from showtimes.tooling import get_logger
+
 __all__ = (
     "FileObject",
     "LocalStorage",
@@ -391,26 +393,44 @@ class S3Storage(Storage):
         secret_key: str,
         region: Optional[str],
         *,
-        host: Optional[str] = None,
+        endpoint: Optional[str] = None,
     ) -> None:
         self._session = BotocoreSession()
         self._client: Optional[S3Client] = None
+        self._logger = get_logger("Showtimes.Storage.S3Storage")
 
         self.__key = access_key
         self.__bucket = bucket
         self.__secret = secret_key
         self.__region = region
-        self.__host = host
+        self.__endpoint = endpoint
 
     async def start(self):
         if self._client is None:
-            self._client = self._session.create_client(
+            self._client = await self._session.create_client(
                 "s3",  # type: ignore
                 region_name=self.__region,
-                endpoint_url=self.__host,
+                endpoint_url=self.__endpoint,
                 aws_access_key_id=self.__key,
                 aws_secret_access_key=self.__secret,
-            )
+            ).__aenter__()
+            await self._test()
+
+    async def _test(self):
+        if self._client is None:
+            raise RuntimeError("Client not started")
+
+        try:
+            self._logger.info("Testing connection to S3 server...")
+            results = await self._client.list_objects_v2(Bucket=self.__bucket)
+            resp_meta = results["ResponseMetadata"]
+            status_code = resp_meta["HTTPStatusCode"]
+            if status_code != 200:
+                raise RuntimeError("Connection to S3 server failed!")
+            self._logger.info("Connection to S3 server successful!")
+        except self._client.exceptions.ClientError as exc:
+            self._logger.error("Connection to S3 server failed!", exc_info=exc)
+            raise RuntimeError("Connection to S3 server failed!") from exc
 
     async def close(self):
         if self._client is not None:
@@ -421,42 +441,40 @@ class S3Storage(Storage):
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
-        async with self._client as client:
-            try:
-                resp = await client.get_object_attributes(
-                    Bucket=self.__bucket,
-                    Key=path,
-                    ObjectAttributes=["ObjectSize"],
-                )
-            except client.exceptions.NoSuchKey:
-                return None
-            size = resp["ObjectSize"]
-            last_mod = resp["LastModified"]
-            guess_mime, _ = guess_type(filename)
-            guess_mime = guess_mime or "application/octet-stream"
-            return FileObject(
-                path,
-                guess_mime,
-                size,
-                pendulum.instance(last_mod),
+        try:
+            resp = await self._client.get_object_attributes(
+                Bucket=self.__bucket,
+                Key=path,
+                ObjectAttributes=["ObjectSize"],
             )
+        except self._client.exceptions.NoSuchKey:
+            return None
+        size = resp["ObjectSize"]
+        last_mod = resp["LastModified"]
+        guess_mime, _ = guess_type(filename)
+        guess_mime = guess_mime or "application/octet-stream"
+        return FileObject(
+            path,
+            guess_mime,
+            size,
+            pendulum.instance(last_mod),
+        )
 
     async def exists(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
-        async with self._client as client:
-            try:
-                resp = await client.get_object_attributes(
-                    Bucket=self.__bucket,
-                    Key=path,
-                    ObjectAttributes=["ObjectSize"],
-                )
-                if resp["ObjectSize"] > 0:
-                    return True
-                return False
-            except client.exceptions.NoSuchKey:
-                return False
+        try:
+            resp = await self._client.get_object_attributes(
+                Bucket=self.__bucket,
+                Key=path,
+                ObjectAttributes=["ObjectSize"],
+            )
+            if resp["ObjectSize"] > 0:
+                return True
+            return False
+        except self._client.exceptions.NoSuchKey:
+            return False
 
     async def stream_upload(
         self, base_key: str, parent_id: str, filename: str, data: StreamableData, type: str = "images"
@@ -465,10 +483,8 @@ class S3Storage(Storage):
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
-        async with self._client as client:
-            client: S3Client
-            await client.put_object(Bucket=self.__bucket, Key=path, Body=cast(IO[bytes], data))
-            return await self.stat_file(base_key, parent_id, filename, type)
+        await self._client.put_object(Bucket=self.__bucket, Key=path, Body=cast(IO[bytes], data))
+        return await self.stat_file(base_key, parent_id, filename, type)
 
     async def stream_download(
         self, base_key: str, parent_id: str, filename: str, type: str = "images"
@@ -477,37 +493,34 @@ class S3Storage(Storage):
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
-        async with self._client as client:
-            try:
-                resp = await client.get_object(Bucket=self.__bucket, Key=path)
-                async with resp["Body"] as stream:
-                    yield await stream.read(1024)
-            except client.exceptions.NoSuchKey as exc:
-                raise FileNotFoundError from exc
+        try:
+            resp = await self._client.get_object(Bucket=self.__bucket, Key=path)
+            async with resp["Body"] as stream:
+                yield await stream.read(1024)
+        except self._client.exceptions.NoSuchKey as exc:
+            raise FileNotFoundError from exc
 
     async def download(self, base_key: str, parent_id: str, filename: str, type: str = "images") -> bytes:
         await self.start()
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
-        async with self._client as client:
-            try:
-                resp = await client.get_object(Bucket=self.__bucket, Key=path)
-                async with resp["Body"] as stream:
-                    return await stream.read()
-            except client.exceptions.NoSuchKey as exc:
-                raise FileNotFoundError from exc
+        try:
+            resp = await self._client.get_object(Bucket=self.__bucket, Key=path)
+            async with resp["Body"] as stream:
+                return await stream.read()
+        except self._client.exceptions.NoSuchKey as exc:
+            raise FileNotFoundError from exc
 
     async def delete(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:
             raise RuntimeError("Client not started")
-        async with self._client as client:
-            try:
-                await client.delete_object(Bucket=self.__bucket, Key=path)
-            except client.exceptions.NoSuchKey:
-                return
+        try:
+            await self._client.delete_object(Bucket=self.__bucket, Key=path)
+        except self._client.exceptions.NoSuchKey:
+            return
 
 
 ROOT_PATH = Path(__file__).absolute().parent.parent.parent
@@ -523,7 +536,7 @@ def get_s3_storage() -> S3Storage:
     global _GLOBAL_S3SERVER
 
     if _GLOBAL_S3SERVER is None:
-        raise ValueError("S3 storage not created, call init_s3_storage first")
+        raise RuntimeError("S3 storage not created, call init_s3_storage first")
 
     return _GLOBAL_S3SERVER
 
@@ -534,11 +547,11 @@ async def init_s3_storage(
     secret_key: str,
     region: Optional[str],
     *,
-    host: Optional[str] = None,
+    endpoint: Optional[str] = None,
 ):
     global _GLOBAL_S3SERVER
 
-    stor = S3Storage(bucket, access_key, secret_key, region, host=host)
+    stor = S3Storage(bucket, access_key, secret_key, region, endpoint=endpoint)
     await stor.start()
     _GLOBAL_S3SERVER = stor
 

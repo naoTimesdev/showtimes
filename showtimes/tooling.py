@@ -170,7 +170,7 @@ def setup_logger(log_path: Path):
     return logger
 
 
-def get_env_config(is_production: bool = True):
+def get_env_config(is_production: bool = True, *, include_all: bool = False, include_environ: bool = False):
     """Get the configuration from multiple .env file!"""
     current_dir = Path(__file__).absolute().parent
     root_dir = current_dir.parent
@@ -186,9 +186,14 @@ def get_env_config(is_production: bool = True):
     # .env.local
     env_root_local = dotenv_values(root_dir / ".env.local")
     # .env.production
-    env_root_prod = dotenv_values(root_dir / ".env.production") if is_prod else {}
+    env_root_prod = dotenv_values(root_dir / ".env.production")
     # .env.development
     env_root_dev = dotenv_values(root_dir / ".env.development") if not is_prod else {}
+
+    if not is_prod and not include_all:
+        env_root_prod = {}
+    if is_prod and not include_all:
+        env_root_dev = {}
 
     # priority: .env.local > .env.production > .env.development > .env
     env_merged = {
@@ -197,6 +202,8 @@ def get_env_config(is_production: bool = True):
         **env_root_prod,
         **env_root_dev,
     }
+    if include_environ:
+        env_merged.update(os.environ)
     return env_merged
 
 

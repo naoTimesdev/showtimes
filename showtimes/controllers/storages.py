@@ -22,10 +22,8 @@ from mimetypes import guess_type
 from pathlib import Path
 from typing import (
     IO,
-    Any,
     AsyncIterator,
     Awaitable,
-    Coroutine,
     Optional,
     Protocol,
     Type,
@@ -33,6 +31,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    overload,
 )
 
 import pendulum
@@ -72,10 +71,18 @@ class StreamableData(Protocol):
     Both can be async or not.
     """
 
-    def read(self, size: int = -1) -> Union[bytes, Coroutine[Any, Any, bytes]]:
+    def read(self, size: int = -1) -> bytes:
         ...
 
-    def seek(self, offset: int) -> Union[None, Coroutine[Any, Any, None]]:
+    @overload
+    def seek(self, offset: int, /) -> int:
+        ...
+
+    @overload
+    def seek(self, offset: int, whence: int, /) -> int:
+        ...
+
+    def seek(self, offset: int, whence: int = ..., /) -> int:
         ...
 
 

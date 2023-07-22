@@ -346,3 +346,11 @@ _testing/
 
 # Local/assets stuff
 storages/
+
+# Prediction system
+## Data dump from database
+datasets/dump_*
+## Script to generate dataset
+datasets/*.py
+## Generated training data
+datasets/train_*

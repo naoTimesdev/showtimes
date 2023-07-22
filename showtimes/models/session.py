@@ -34,14 +34,12 @@ __all__ = (
 class ServerSessionInfo(BaseModel):
     server_id: str
     name: str
-    avatar: str | None = None
 
     @classmethod
     def from_db(cls: Type["ServerSessionInfo"], server: ShowtimesServer):
         return cls(
             server_id=str(server.server_id),
             name=server.name,
-            avatar=server.avatar,
         )
 
 

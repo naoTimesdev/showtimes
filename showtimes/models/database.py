@@ -33,10 +33,19 @@ class ImageMetadata(BaseModel):
     The user avatar image.
     """
 
-    key: str = ""
+    type: str
+    """The type of the image"""
+    key: str
     """The key of the image"""
+    parent: str
+    """The parent of the image, if any."""
+    filename: str
+    """The filename of the image"""
     format: str = ""
     """The format of the image"""
+
+    def as_url(self):
+        return f"/{self.type}/{self.key}/{self.parent}/{self.filename}.{self.format}"
 
 
 class DefaultIntegrationType:
@@ -47,10 +56,12 @@ class DefaultIntegrationType:
     DiscordRole = "DISCORD_ROLE"
     DiscordUser = "DISCORD_USER"
     DiscordChannel = "DISCORD_TEXT_CHANNEL"
+    DiscordGuild = "DISCORD_GUILD"
     FansubDB = "FANSUBDB_ID"
     FansubDBProject = "FANSUBDB_PROJECT_ID"
     FansubDBAnime = "FANSUBDB_ANIME_ID"
     ShowtimesUser = "SHOWTIMES_USER"
+    PrefixAnnounce = "ANNOUNCEMENT_"
 
 
 class IntegrationId(BaseModel):
@@ -108,7 +119,6 @@ class RoleActor(Document):
     """
 
     name: str
-    avatar: str
     integrations: list[IntegrationId] = Field(default_factory=list)
     actor_id: UUID = Field(default_factory=make_uuid)
 
@@ -176,7 +186,7 @@ class ShowActor(BaseModel):
 
 
 class ShowPoster(BaseModel):
-    url: str
+    image: ImageMetadata
     """The URL to the poster."""
     color: Optional[int] = None
     """The int color of the poster, representation only."""
@@ -246,7 +256,7 @@ class ShowProject(Document):
 
     assignments: list[ShowActor] = Field(default_factory=list)
     """The assignments of each role"""
-    episodes: list[EpisodeStatus] = Field(default_factory=list)
+    statuses: list[EpisodeStatus] = Field(default_factory=list)
     """The status of each episode"""
 
     show_id: UUID = Field(default_factory=make_uuid)
@@ -271,26 +281,8 @@ class ShowProject(Document):
         use_state_management = True
 
 
-class CollaborationLinkStatus(int, Enum):
-    """
-    The collaboration link status.
-    """
-
-    PENDING = 0
-    """The status of the link is pending."""
-    ACCEPTED = 1
-    """The status of the link is accepted."""
-    REJECTED = -1
-    """The status of the link is rejected."""
-    CANCELLED = -10
-    """The status of the link are pending, then cancelled by the source."""
-    DROPPED = -99
-    """The status of the link are accepted, then dropped after it."""
-
-
 class ShowCollaborationLink(BaseModel):
     project: Link[ShowProject]
-    status: CollaborationLinkStatus
     servers: list[UUID] = Field(default_factory=list)
 
 
@@ -382,11 +374,32 @@ class ShowtimesServer(Document):
     """The integrations of this server."""
     owners: list[Link[ShowtimesUser]] = Field(default_factory=list)
     """The owners of this server."""
-    avatar: Optional[str] = None
+    avatar: Optional[ImageMetadata] = None
     """The avatar link of this server."""
 
     server_id: UUID = Field(default_factory=make_uuid)
 
     class Settings:
         name = "ShowtimesServers"
+        use_state_management = True
+
+
+class ShowtimesCollaboration(Document):
+    """
+    The collaboration document.
+    """
+
+    code: str
+    """The code of the collaboration."""
+    source: Link[ShowtimesServer]
+    """The source server of the collaboration."""
+    target: Link[ShowtimesServer]
+    """The target server of the collaboration."""
+    project: Link[ShowProject]
+    """The project for the collaboration."""
+
+    collab_id: UUID = Field(default_factory=make_uuid)
+
+    class Settings:
+        name = "ShowtimesCollaborations"
         use_state_management = True

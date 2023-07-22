@@ -86,7 +86,7 @@ class UserGQL:
             username=user.username,
             privilege=user.privilege,
             integrations=[IntegrationGQL.from_db(integration) for integration in user.integrations],
-            avatar=ImageMetadataGQL.from_db(user.avatar, "users") if user.avatar else None,
+            avatar=ImageMetadataGQL.from_db(user.avatar) if user.avatar else None,
             user_id=str(cast(PydanticObjectId, user.id)),
             discord_meta=discord_meta,
         )

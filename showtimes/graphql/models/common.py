@@ -45,12 +45,12 @@ class IntegrationGQL:
 
 @gql.type(name="ImageMetadata", description="An image for an entity")
 class ImageMetadataGQL:
-    name: str = gql.field(description="The key of the image")
+    path: str = gql.field(description="The path to the image")
     type: str = gql.field(description="The type of the avatar (user, group, shows, etc)")
 
     @classmethod
-    def from_db(cls, avatar: ImageMetadata, type: str):
+    def from_db(cls, avatar: ImageMetadata):
         return cls(
-            name=f"{avatar.key}.{avatar.format}",
-            type=type,
+            path=avatar.as_url(),
+            type=avatar.type,
         )

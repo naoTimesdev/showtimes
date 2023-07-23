@@ -449,14 +449,13 @@ class S3Storage(Storage):
         if self._client is None:
             raise RuntimeError("Client not started")
         try:
-            resp = await self._client.get_object_attributes(
+            resp = await self._client.head_object(
                 Bucket=self.__bucket,
                 Key=path,
-                ObjectAttributes=["ObjectSize"],
             )
         except self._client.exceptions.NoSuchKey:
             return None
-        size = resp["ObjectSize"]
+        size = resp["ContentLength"]
         last_mod = resp["LastModified"]
         guess_mime, _ = guess_type(filename)
         guess_mime = guess_mime or "application/octet-stream"

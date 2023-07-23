@@ -25,6 +25,7 @@ from .users import UserGQL
 __all__ = (
     "Result",
     "UserResult",
+    "ErrorCode",
 )
 
 
@@ -32,6 +33,21 @@ __all__ = (
 class Result:
     success: bool = gql.field(description="Success status")
     message: Optional[str] = gql.field(description="Extra message if any, might be available if success is False")
+    code: Optional[str] = gql.field(description="Extra code if any, might be available if success is False")
+
+
+class ErrorCode:
+    # User related
+    UserNotFound = "USER_NOT_FOUND"
+    UserAlreadyExist = "USER_ALREADY_EXIST"
+    UserMigrate = "USER_NEED_MIGRATE"
+    UserApprovalIncorrect = "USER_APPROVAL_INCORRECT"
+    UserInvalidPass = "USER_INVALID_PASSWORD"
+    UserInvalidOldPass = "USER_INVALID_OLD_PASSWORD"
+    UserRepeatOld = "USER_REPEAT_OLD_PASSWORD"
+    SessionExist = "SESSION_EXIST"
+    SessionUnknown = "SESSION_UNKNOWN"
+    SessionNotMaster = "SESSION_NOT_MASTER"
 
 
 UserResult = gql.union(

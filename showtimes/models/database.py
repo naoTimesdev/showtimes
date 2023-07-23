@@ -253,6 +253,8 @@ class ShowProject(Document):
     """The poster/cover of the project"""
     external: Link[ShowExternalData]
     """The external data of the project, linked to the external document."""
+    server_id: UUID
+    """The ID of the server that owns this project."""
 
     assignments: list[ShowActor] = Field(default_factory=list)
     """The assignments of each role"""
@@ -279,11 +281,6 @@ class ShowProject(Document):
     class Settings:
         name = "ShowtimesProjects"
         use_state_management = True
-
-
-class ShowCollaborationLink(BaseModel):
-    project: Link[ShowProject]
-    servers: list[UUID] = Field(default_factory=list)
 
 
 class UserType(str, Enum):
@@ -341,19 +338,31 @@ class ShowtimesUser(Document):
         use_state_management = True
 
 
-class ShowtimesUserRegister(Document):
+class ShowtimesTempUserType(str, Enum):
+    """
+    The temporary user type
+    """
+
+    REGISTER = "REGISTER"
+    """New user registration"""
+    MIGRATION = "MIGRATION"
+    """Old user migration that does not have password or discord_meta"""
+
+
+class ShowtimesTemporaryUser(Document):
     """
     A temporary model to hold the register information.
     """
 
     username: str
     password: str
+    type: ShowtimesTempUserType
 
     approval_code: str = Field(default_factory=lambda: generate_custom_code(16, True, True))
     user_id: UUID = Field(default_factory=make_uuid)
 
     class Settings:
-        name = "ShowtimesUserRegister"
+        name = "ShowtimesTemporaryUser"
         use_state_management = True
 
 
@@ -368,8 +377,6 @@ class ShowtimesServer(Document):
     """The name of the server."""
     projects: list[Link[ShowProject]] = Field(default_factory=list)
     """The projects of this server."""
-    collaborations: list[ShowCollaborationLink] = Field(default_factory=list)
-    """The collaborations of this server."""
     integrations: list[IntegrationId] = Field(default_factory=list)
     """The integrations of this server."""
     owners: list[Link[ShowtimesUser]] = Field(default_factory=list)
@@ -403,3 +410,14 @@ class ShowtimesCollaboration(Document):
     class Settings:
         name = "ShowtimesCollaborations"
         use_state_management = True
+
+
+class ShowtimesCollaborationLinkSync(Document):
+    """
+    The collaboration link document.
+    """
+
+    projects: list[UUID] = Field(default_factory=list)
+    """The projects of the collaboration, must be the same external ID."""
+    servers: list[UUID] = Field(default_factory=list)
+    """The servers that joined the collaboration."""

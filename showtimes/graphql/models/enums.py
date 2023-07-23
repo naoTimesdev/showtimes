@@ -18,12 +18,20 @@ from __future__ import annotations
 
 import strawberry as gql
 
-from showtimes.models.database import UserType
+from showtimes.models.database import ShowtimesTempUserType, UserType
 
-__all__ = ("UserTypeGQL",)
+__all__ = (
+    "UserTypeGQL",
+    "UserTempTypeGQL",
+)
 
 UserTypeGQL = gql.enum(
     UserType,
     name="UserType",
     description="The user type",
+)
+UserTempTypeGQL = gql.enum(
+    ShowtimesTempUserType,
+    name="UserTempType",
+    description="The temporary user type",
 )

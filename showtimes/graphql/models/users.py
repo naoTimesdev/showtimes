@@ -23,16 +23,16 @@ from uuid import UUID
 import strawberry as gql
 from beanie import PydanticObjectId
 
-from showtimes.models.database import ShowtimesUser, ShowtimesUserDiscord, ShowtimesUserRegister
+from showtimes.models.database import ShowtimesTemporaryUser, ShowtimesUser, ShowtimesUserDiscord
 from showtimes.models.session import UserSession
 from showtimes.utils import make_uuid
 
 from .common import ImageMetadataGQL, IntegrationGQL
-from .enums import UserTypeGQL
+from .enums import UserTempTypeGQL, UserTypeGQL
 
 __all__ = (
     "UserGQL",
-    "UserRegisterGQL",
+    "UserTemporaryGQL",
 )
 
 
@@ -103,22 +103,25 @@ class UserGQL:
         )
 
 
-@gql.type(name="UserRegister", description="The user registration information")
-class UserRegisterGQL:
+@gql.type(name="UserTemporary", description="The temporary user information")
+class UserTemporaryGQL:
     id: UUID = gql.field(description="The user ID")
     """The user ID"""
     username: str = gql.field(description="The user's username")
     """The user username"""
     approval_code: str = gql.field(description="The user's approval code")
     """The user approval code"""
+    type: UserTempTypeGQL = gql.field(description="The user's type")
+    """The user type"""
 
     user_id: gql.Private[str]  # ObjectId
 
     @classmethod
-    def from_db(cls: Type[UserRegisterGQL], user: ShowtimesUserRegister):
+    def from_db(cls: Type[UserTemporaryGQL], user: ShowtimesTemporaryUser):
         return cls(
             id=user.user_id,
             username=user.username,
             approval_code=user.approval_code,
+            type=user.type,
             user_id=str(cast(PydanticObjectId, user.id)),
         )

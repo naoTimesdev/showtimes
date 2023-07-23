@@ -34,8 +34,8 @@ from showtimes.models.database import (
     ShowExternalTMDB,
     ShowProject,
     ShowtimesServer,
+    ShowtimesTemporaryUser,
     ShowtimesUser,
-    ShowtimesUserRegister,
 )
 
 __all__ = ("ShowtimesDatabase",)
@@ -129,6 +129,6 @@ class ShowtimesDatabase:
                 ShowProject,
                 ShowtimesServer,
                 ShowtimesUser,
-                ShowtimesUserRegister,
+                ShowtimesTemporaryUser,
             ],  # type: ignore
         )

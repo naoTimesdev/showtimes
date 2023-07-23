@@ -22,6 +22,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.datastructures import Default
+from fastapi.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from strawberry.exceptions import StrawberryGraphQLError
 
 from showtimes.controllers.anilist import get_anilist_client, init_anilist_client
@@ -289,6 +291,11 @@ def create_app():
         },
         contact={"url": "https://github.com/naoTimesdev/showtimes/"},
         terms_of_service="https://naoti.me/terms",
+        middleware=[
+            Middleware(
+                CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["Authorization", "Cookie"]
+            ),
+        ],
     )
 
     run_dev = to_boolean(os.environ.get("DEVELOPMENT", "0"))

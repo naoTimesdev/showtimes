@@ -31,7 +31,7 @@ from showtimes.models.session import UserSession
 from showtimes.tooling import get_env_config
 
 from .backend import InMemoryBackend, RedisBackend, SessionBackend
-from .errors import SessionError
+from .errors import BackendError, SessionError
 
 __all__ = (
     "SameSiteEnum",
@@ -88,6 +88,17 @@ class SessionHandler:
 
     async def set_api_session(self, data: UserSession):
         await self.backend.create(f"{self.identifier}|api|{data.user_id}", data)
+
+    async def update_session(self, data: UserSession, response: Optional[Response] = None):
+        await self.backend.update(data.session_id, data)
+        if response is not None:
+            self.set_cookie(response, data.session_id)
+
+    async def set_or_update_session(self, data: UserSession, response: Optional[Response] = None):
+        try:
+            await self.update_session(data, response)
+        except BackendError:
+            await self.set_session(data, response)
 
     def set_cookie(self, response: Response, session_id: UUID):
         dumps = self.signer.dumps(session_id.hex)

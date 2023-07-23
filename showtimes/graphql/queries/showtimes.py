@@ -19,10 +19,19 @@ from __future__ import annotations
 from typing import Literal, TypeAlias, TypeVar
 from uuid import UUID
 
+import strawberry as gql
+from beanie.operators import In as OpIn
+
+from showtimes.graphql.cursor import Cursor, parse_cursor, to_cursor
 from showtimes.graphql.models.fallback import ErrorCode
+from showtimes.graphql.models.pagination import Connection, PageInfo, SortDirection
+from showtimes.graphql.models.servers import ServerGQL
 from showtimes.models.database import ShowtimesServer
 
-__all__ = ("resolve_server_fetch",)
+__all__ = (
+    "resolve_server_fetch",
+    "resolve_servers_fetch_paginated",
+)
 ResultT = TypeVar("ResultT")
 ResultOrT: TypeAlias = tuple[Literal[False], str, str] | tuple[Literal[True], ResultT, None]
 
@@ -33,3 +42,61 @@ async def resolve_server_fetch(srv_id: str) -> ResultOrT[ShowtimesServer]:
         return False, "Server not found", ErrorCode.ServerNotFound
 
     return True, srv_info, None
+
+
+async def resolve_servers_fetch_paginated(
+    ids: list[UUID] | None = gql.UNSET,
+    limit: int = 20,
+    cursor: Cursor | None = gql.UNSET,
+    sort: SortDirection = SortDirection.ASC,
+) -> Connection[ServerGQL]:
+    act_limit = limit + 1
+    direction = "-" if sort is SortDirection.DESCENDING else "+"
+
+    cursor_id = parse_cursor(cursor)
+    find_args = []
+    added_query_ids = False
+    if isinstance(ids, list):
+        find_args.append(OpIn(ShowtimesServer.server_id, ids))
+        added_query_ids = True
+    if cursor_id is not None:
+        find_args.append(ShowtimesServer.id >= cursor_id)
+
+    items = (
+        await ShowtimesServer.find(
+            *find_args,
+        )
+        .sort(f"{direction}_id")
+        .limit(act_limit)
+        .to_list()
+    )
+    if len(items) < 1:
+        return Connection(
+            count=0,
+            page_info=PageInfo(total_results=0, per_page=limit, next_cursor=None, has_next_page=False),
+            nodes=[],
+        )
+
+    if added_query_ids:
+        items_count = await ShowtimesServer.find(find_args[0]).count()
+    else:
+        items_count = await ShowtimesServer.find().count()
+
+    last_item = None
+    if len(items) > limit:
+        last_item = items.pop()
+
+    next_cursor = last_item.id if last_item is not None else None
+    has_next_page = next_cursor is not None
+
+    mapped_items = [ServerGQL.from_db(item) for item in items]
+    return Connection(
+        count=len(mapped_items),
+        page_info=PageInfo(
+            total_results=items_count,
+            per_page=limit,
+            next_cursor=to_cursor(next_cursor),
+            has_next_page=has_next_page,
+        ),
+        nodes=mapped_items,
+    )

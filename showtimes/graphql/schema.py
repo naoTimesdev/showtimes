@@ -28,6 +28,8 @@ from showtimes.controllers.sessions.handler import is_master_session
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
+from showtimes.graphql.cursor import Cursor
+from showtimes.graphql.models.pagination import Connection, SortDirection
 from showtimes.graphql.models.servers import ServerGQL
 from showtimes.models.database import ShowtimesServer, ShowtimesUser, UserType
 from showtimes.models.session import ServerSessionInfo
@@ -42,7 +44,7 @@ from .mutations.users import (
     mutate_reset_password,
 )
 from .queries.search import QuerySearch
-from .queries.showtimes import resolve_server_fetch
+from .queries.showtimes import resolve_server_fetch, resolve_servers_fetch_paginated
 
 __all__ = ("make_schema",)
 
@@ -107,6 +109,20 @@ class Query:
 
         srv_cast = ServerGQL.from_db(cast(ShowtimesServer, srv_info))
         return srv_cast
+
+    @gql.field(description="Get all servers with pagination")
+    async def servers(
+        self,
+        info: Info[SessionQLContext, None],
+        ids: list[UUID] | None = gql.UNSET,
+        limit: int = 10,
+        cursor: Cursor | None = gql.UNSET,
+        sort: SortDirection = SortDirection.ASC,
+    ) -> Connection[ServerGQL] | Result:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        return await resolve_servers_fetch_paginated(ids, limit, cursor, sort)
 
 
 @gql.type

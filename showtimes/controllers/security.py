@@ -21,6 +21,7 @@ from typing import Optional
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from argon2.profiles import RFC_9106_LOW_MEMORY
 
 __all__ = (
     "get_argon2",
@@ -29,7 +30,17 @@ __all__ = (
 )
 
 
-_ARGON2_HASHER = PasswordHasher()
+# Cache the PasswordHasher object, make it consistent between version and use
+# the low memory RFC profile.
+_ARGON2_HASHER = PasswordHasher(
+    time_cost=RFC_9106_LOW_MEMORY.time_cost,
+    memory_cost=RFC_9106_LOW_MEMORY.memory_cost,
+    parallelism=RFC_9106_LOW_MEMORY.parallelism,
+    hash_len=RFC_9106_LOW_MEMORY.hash_len,
+    salt_len=RFC_9106_LOW_MEMORY.salt_len,
+    encoding="utf-8",
+    type=RFC_9106_LOW_MEMORY.type,
+)
 
 
 def get_argon2() -> PasswordHasher:

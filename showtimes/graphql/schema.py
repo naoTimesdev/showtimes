@@ -27,6 +27,7 @@ from showtimes.controllers.sessions.handler import is_master_session
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
+from showtimes.graphql.queries.search import QuerySearch
 
 from .models import ErrorCode, Result, UserGQL, UserTemporaryGQL
 from .mutations.users import (
@@ -49,30 +50,7 @@ class _SchemaParam(TypedDict):
 
 @gql.type
 class Query:
-    @gql.field(description="Get the current user")
-    async def user(self, info: Info[SessionQLContext, None]) -> UserGQL | None:
-        if info.context.user is None:
-            raise Exception("You are not logged in")
-        # return info.context.user
-        ...
-
-    @gql.field(description="Get the current or requested server")
-    async def server(self, info: Info[SessionQLContext, None], id: UUID | None = gql.UNSET) -> UserGQL | Result:
-        if info.context.user is None:
-            raise Exception("You are not logged in")
-
-        if id is not None:
-            ...  # Check if user is in server
-
-        if id is None and info.context.user.active is not None:
-            # Get active server
-            ...
-
-        return Result(
-            success=False,
-            message="You must specify a server ID or set an active server by `mutation { activeServer }`",
-            code="TODO",
-        )
+    search: QuerySearch = gql.field(description="Do a search on external source or internal database")
 
 
 @gql.type

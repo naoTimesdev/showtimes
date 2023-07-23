@@ -48,6 +48,8 @@ class ErrorCode:
     SessionExist = "SESSION_EXIST"
     SessionUnknown = "SESSION_UNKNOWN"
     SessionNotMaster = "SESSION_NOT_MASTER"
+    AnilistAPIError = "ANILIST_API_ERROR"
+    AnilistAPIUnavailable = "ANILIST_API_UNAVAILABLE"
 
 
 UserResult = gql.union(

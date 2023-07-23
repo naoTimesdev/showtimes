@@ -28,7 +28,11 @@ from .ratelimiter import NetworkRateLimiter
 if TYPE_CHECKING:
     from multidict import CIMultiDictProxy
 
-__all__ = ("AnilistAPI",)
+__all__ = (
+    "AnilistAPI",
+    "get_anilist_client",
+    "init_anilist_client",
+)
 
 
 class AnilistAPI:
@@ -48,6 +52,9 @@ class AnilistAPI:
 
         self._requester = GraphQLClient(self.BASE_API, session)
 
+    async def close(self):
+        await self._sesi.close()
+
     def _handle_x_rate_headers(self, headers: "CIMultiDictProxy[str]"):
         limit = headers.get("X-RateLimit-Limit")
         remaining = headers.get("X-RateLimit-Remaining")
@@ -59,15 +66,17 @@ class AnilistAPI:
         if remaining is not None:
             self._limiter.remaining = remaining
 
-    async def handle(self, query: str, variables: dict | None = None) -> GraphQLResult:  # type: ignore
+    async def handle(
+        self, query: str, variables: dict | None = None, operation_name: Optional[str] = None
+    ) -> GraphQLResult:  # type: ignore
         if variables is None:
             variables = {}
         async for _ in self._limiter:
-            requested = await self._requester.query(query, variables)
+            requested = await self._requester.query(query, variables, operation_name)
             self._handle_x_rate_headers(requested.headers)
             return requested
 
-    async def paginate(self, query: str, variables: Optional[dict] = None):
+    async def paginate(self, query: str, variables: Optional[dict] = None, operation_name: Optional[str] = None):
         variables = variables or {}
 
         def internal_function(data: Optional[dict]):
@@ -86,10 +95,28 @@ class AnilistAPI:
             return has_next_page, current_page + 1, "page"
 
         await self._limiter.drip()
-        async for result, pageInfo in self._requester.paginate(query, internal_function, variables):
+        async for result, pageInfo in self._requester.paginate(query, internal_function, variables, operation_name):
             self._handle_x_rate_headers(result.headers)
             yield result
             if pageInfo.hasMore:
                 await self._limiter.drip()
             else:
                 break
+
+
+_ANILIST_CLIENT: Optional[AnilistAPI] = None
+
+
+def get_anilist_client():
+    global _ANILIST_CLIENT
+    if _ANILIST_CLIENT is None:
+        raise Exception("Anilist client is not initialized")
+    return _ANILIST_CLIENT
+
+
+async def init_anilist_client(session: aiohttp.ClientSession | None = None):
+    global _ANILIST_CLIENT
+
+    if _ANILIST_CLIENT is None:
+        session = session or aiohttp.ClientSession()
+        _ANILIST_CLIENT = AnilistAPI(session)

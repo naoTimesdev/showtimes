@@ -16,14 +16,13 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
+from enum import Enum
+
 import strawberry as gql
 
 from showtimes.models.database import ShowtimesTempUserType, UserType
 
-__all__ = (
-    "UserTypeGQL",
-    "UserTempTypeGQL",
-)
+__all__ = ("UserTypeGQL", "UserTempTypeGQL", "SearchExternalTypeGQL")
 
 UserTypeGQL = gql.enum(
     UserType,
@@ -35,3 +34,17 @@ UserTempTypeGQL = gql.enum(
     name="UserTempType",
     description="The temporary user type",
 )
+
+
+@gql.enum(name="SearchExternalType", description="The external search type")
+class SearchExternalTypeGQL(Enum):
+    SHOWS = "shows"
+    BOOKS = "books"
+    UNKNOWN = "unknown"
+
+
+@gql.enum(name="SearchTitleType", description="Select title type to be shown in search results")
+class SearchTitleTypeGQL(Enum):
+    ENGLISH = "english"
+    ROMANIZED = "romanized"
+    NATIVE = "native"

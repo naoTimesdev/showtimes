@@ -21,6 +21,7 @@ from typing import Generic, Literal, Optional, TypeVar
 from .abstract import AttributeDict
 
 AT = TypeVar("AT")
+PT = TypeVar("PT")
 
 __all__ = (
     "AnilistFuzzyDate",
@@ -31,6 +32,7 @@ __all__ = (
     "AnilistAnimeScheduleResult",
     "AnilistAnimeInfoResult",
     "AnilistQueryMedia",
+    "AnilistPagedMedia",
 )
 AnilistAnimeFormat = Literal[
     "TV",
@@ -46,9 +48,9 @@ AnilistFormat = AnilistAnimeFormat | AnilistBooksFormat
 
 
 class AnilistFuzzyDate(AttributeDict):
-    year: Optional[str]
-    month: Optional[str]
-    day: Optional[str]
+    year: Optional[int]
+    month: Optional[int]
+    day: Optional[int]
 
 
 class AnilistAiringScheduleNode(AttributeDict):
@@ -76,18 +78,29 @@ class AnilistTitle(AttributeDict):
 
 
 class AnilistAnimeScheduleResult(AttributeDict):
+    airingSchedule: AnilistAiringSchedules  # noqa: N815
+
+
+class AnilistAnimeResultBase(AttributeDict):
     id: int
     format: AnilistFormat
     episodes: Optional[int]
     startDate: AnilistFuzzyDate  # noqa: N815
-    airingSchedule: AnilistAiringSchedules  # noqa: N815
 
 
-class AnilistAnimeInfoResult(AnilistAnimeScheduleResult):
+class AnilistAnimeInfoResult(AnilistAnimeResultBase):
     idMal: Optional[int]  # noqa: N815
     title: AnilistTitle
     coverImage: AnilistCoverImage  # noqa: N815
 
 
+class AnilistAnimeScheduleInfoResult(AnilistAnimeInfoResult, AnilistAnimeScheduleResult):
+    ...
+
+
 class AnilistQueryMedia(AttributeDict, Generic[AT]):
-    Media: AT
+    media: AT
+
+
+class AnilistPagedMedia(AttributeDict, Generic[PT]):
+    Page: PT

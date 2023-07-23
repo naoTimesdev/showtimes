@@ -29,14 +29,14 @@ from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
 from showtimes.controllers.security import encrypt_password
-from showtimes.controllers.storages import get_storage, init_s3_storage
+from showtimes.controllers.storages import get_s3_storage, get_storage, init_s3_storage
 from showtimes.models import database as newdb
 from showtimes.tooling import get_env_config, setup_logger
 from showtimes.utils import make_uuid, try_int
 
 CURRENT_DIR = Path(__file__).absolute().parent
 ROOT_DIR = CURRENT_DIR.parent
-logger = setup_logger(ROOT_DIR / "logs" / "migrations")
+logger = setup_logger(ROOT_DIR / "logs" / "migrations.log")
 
 
 # Old DB Schemas
@@ -210,7 +210,7 @@ def str_or_none(value: Any | None) -> str | None:
 
 ServerId: TypeAlias = str
 ProjectId: TypeAlias = str
-UsersHolder: TypeAlias = dict[str, newdb.ShowtimesUser]
+UsersHolder: TypeAlias = dict[str, newdb.ShowtimesUserGroup]
 RolesHolder: TypeAlias = dict[str, newdb.RoleActor]
 ProjectHolder: TypeAlias = dict[ProjectId, newdb.ShowProject]
 CollabHolder: TypeAlias = dict[ServerId, list[tuple[ProjectId, list[ServerId]]]]
@@ -234,7 +234,7 @@ async def _upload_poster(server_id: str, project_id: str, poster: ShowAnimePoste
     poster_ext = Path(poster.url).suffix
     bytes_io = BytesIO(bytes_data)
     bytes_io.seek(0)
-    logger.info(f"  Uploading poster{poster_ext}...")
+    logger.info(f"    Uploading poster{poster_ext}...")
     result = await stor.stream_upload(
         server_id,
         project_id,
@@ -483,13 +483,17 @@ async def _process_showtimes_project(
                 ),
             )
 
+    logger.info(f"   Processing {showanime.title}...")
+    logger.info(f"   Processing {showanime.title} assigness...")
     assignment, actors = await _process_showtimes_project_assignments(
         showanime.assignments,
         users,
         actors,
         session=session,
     )
+    logger.info(f"   Processing {showanime.title} external Anilist data...")
     external_data = await _process_showtimes_project_external_data(showanime, session=session)
+    logger.info(f"   Processing {showanime.title} new statuses format...")
     new_statuses = await _process_showtimes_project_episodes(showanime.status, assignment)
 
     last_update: DateTime = pendulum.now(tz="UTC")
@@ -513,6 +517,7 @@ async def _process_showtimes_project(
         updated_at=last_update,
     )
 
+    logger.info(f"   Adding {showanime.title}...")
     _ssproject = await newdb.ShowProject.insert_one(ssproject, session=session)
     if _ssproject is None:
         raise RuntimeError("Failed to add project")
@@ -540,16 +545,18 @@ async def _process_showtimes_server(
             ),
         )
 
-    owners_list: list[newdb.ShowtimesUser] = []
+    owners_list: list[newdb.ShowtimesUserGroup] = []
+    logger.info("  Processing owners...")
     for owner in showtimes.serverowner:
         if owner in users:
             owners_list.append(users[owner])
         else:
-            ssuser = newdb.ShowtimesUser(
+            ssuser = newdb.ShowtimesTemporaryUser(
                 username=owner,
-                privilege=newdb.UserType.USER,
+                password="unset_" + await encrypt_password(str(make_uuid())),
+                type=newdb.ShowtimesTempUserType.MIGRATION,
             )
-            _added_user = await newdb.ShowtimesUser.insert_one(ssuser, session=session)
+            _added_user = await newdb.ShowtimesTemporaryUser.insert_one(ssuser, session=session)
             if _added_user is None:
                 raise RuntimeError("Failed to add user")
             users[owner] = _added_user
@@ -558,6 +565,7 @@ async def _process_showtimes_server(
     sserver_id = make_uuid()
 
     SHOW_PROJECT: ProjectHolder = {}
+    logger.info(f"  Processing {len(showtimes.anime)} projects...")
     for project in showtimes.anime:
         ssproject, actors = await _process_showtimes_project(
             sserver_id,
@@ -575,6 +583,7 @@ async def _process_showtimes_server(
         owners=[to_link(owner) for owner in owners_list],
         server_id=sserver_id,
     )
+    logger.info(f"  Adding server {sserver.name}...")
     _sserver_new = await newdb.ShowtimesServer.insert_one(sserver, session=session)
     if _sserver_new is None:
         raise RuntimeError("Failed to add server")
@@ -623,10 +632,13 @@ class Forward:
             newdb.ShowtimesServer,
             newdb.ShowProject,
             newdb.ShowtimesUser,
+            newdb.ShowtimesTemporaryUser,
             newdb.ShowExternalData,
             newdb.ShowExternalTMDB,
             newdb.ShowExternalAnilist,
             newdb.RoleActor,
+            newdb.ShowtimesCollaboration,
+            newdb.ShowtimesCollaborationLinkSync,
             ShowtimesSchema,
             ShowAdminSchema,
             ShowtimesUISchema,
@@ -688,11 +700,12 @@ class Forward:
         if unregistered_ui:
             logger.info(f"Found {len(unregistered_ui)} legacy users that are not registered, migrating...")
         for missing_ui in unregistered_ui:
-            ssuser = newdb.ShowtimesUser(
+            ssuser = newdb.ShowtimesTemporaryUser(
                 username=missing_ui.admin_id,
-                privilege=newdb.UserType.USER,
+                password="unset_" + await encrypt_password(str(make_uuid())),
+                type=newdb.ShowtimesTempUserType.MIGRATION,
             )
-            _added_user = await newdb.ShowtimesUser.insert_one(ssuser, session=session)
+            _added_user = await newdb.ShowtimesTemporaryUser.insert_one(ssuser, session=session)
             if _added_user is None:
                 raise RuntimeError("Failed to add user")
             ADDED_SHOWTIMES_USERS[missing_ui.admin_id] = _added_user
@@ -701,7 +714,7 @@ class Forward:
         logger.info(f"Creating default {len(ADDED_SHOWTIMES_USERS)} role actors from migrated users...")
         for ssuser in ADDED_SHOWTIMES_USERS.values():
             roleact = newdb.RoleActor(
-                name=ssuser.name or ssuser.username,
+                name=getattr(ssuser, "name", None) or ssuser.username,
                 integrations=[
                     newdb.IntegrationId(id=str(ssuser.user_id), type=newdb.DefaultIntegrationType.ShowtimesUser),
                     newdb.IntegrationId(id=str(ssuser.username), type=newdb.DefaultIntegrationType.DiscordUser),
@@ -770,6 +783,7 @@ class Forward:
         # We want to merge them together into one
         # dict[ServerId, list[tuple[ProjectId, list[CollabServerId]]]
         MERGED_COLLAB: CollabHolder = _deduplicates_collaboration_data(PENDING_COLLAB)
+        logger.info("Migrating to ShowtimesCollaborationLinkSync...")
         for srv_id, collab_info in MERGED_COLLAB.items():
             _self_srv = ADDED_SHOWTIMES_SERVERS.get(srv_id)
             if _self_srv is None:
@@ -819,6 +833,78 @@ class Forward:
                 if _cres is None:
                     raise RuntimeError("Failed to add collaboration link")
 
+        try:
+            s3_bucket = get_s3_storage()
+            logger.info("Closing S3 storage...")
+            await s3_bucket.close()
+        except Exception as exc:
+            logger.exception(exc)
+            logger.warning("Failed to close S3 storage")
 
-class Backward:  # no backward implementation, so we can't rollback
-    ...
+
+class Backward:
+    @free_fall_migration(
+        document_models=[
+            newdb.ShowtimesServer,
+            newdb.ShowProject,
+            newdb.ShowtimesUser,
+            newdb.ShowtimesTemporaryUser,
+            newdb.ShowExternalData,
+            newdb.ShowExternalTMDB,
+            newdb.ShowExternalAnilist,
+            newdb.RoleActor,
+            newdb.ShowtimesCollaboration,
+            newdb.ShowtimesCollaborationLinkSync,
+        ]
+    )
+    async def revert_by_delete(self, session):
+        # Cascade delete
+        env_config = get_env_config(include_environ=True)
+
+        S3_ENDPOINT = env_config.get("S3_ENDPOINT")
+        S3_KEY = env_config.get("S3_ACCESS_KEY")
+        S3_SECRET = env_config.get("S3_SECRET_KEY")
+        S3_REGION = env_config.get("S3_REGION")
+        S3_BUCKET = env_config.get("S3_BUCKET")
+
+        if S3_SECRET is not None and S3_KEY is not None and S3_BUCKET is not None:
+            logger.info("Initializing S3 storage...")
+            await init_s3_storage(S3_BUCKET, S3_KEY, S3_SECRET, S3_REGION, endpoint=S3_ENDPOINT)
+            logger.info("S3 storage initialized!")
+
+        logger.info("Deleting ShowtimesUser...")
+        await newdb.ShowtimesUser.delete_all(session=session)
+        logger.info("Deleting ShowtimesTemporaryUser...")
+        await newdb.ShowtimesTemporaryUser.delete_all(session=session)
+        logger.info("Deleting ShowtimesServer...")
+        await newdb.ShowtimesServer.delete_all(session=session)
+        logger.info("Deleting ShowProject...")
+        show_projects = await newdb.ShowProject.find_all(session=session).to_list()
+        storage = get_storage()
+        for show_project in show_projects:
+            poster = show_project.poster.image
+            try:
+                logger.info(f"  Deleting poster {poster.key}...")
+                await storage.delete(poster.key, poster.parent, poster.filename, type="project")
+            except Exception as exc:
+                logger.exception(exc)
+                logger.warning(f"  Failed to delete poster {poster.key}")
+        logger.info("Deleting ShowExternalData...")
+        await newdb.ShowExternalAnilist.delete_all(session=session)
+        await newdb.ShowExternalTMDB.delete_all(session=session)
+        await newdb.ShowExternalData.delete_all(session=session)
+        logger.info("Deleting RoleActor...")
+        await newdb.RoleActor.delete_all(session=session)
+        logger.info("Deleting ShowtimesCollaboration...")
+        await newdb.ShowtimesCollaboration.delete_all(session=session)
+        logger.info("Deleting ShowtimesCollaborationLinkSync...")
+        await newdb.ShowtimesCollaborationLinkSync.delete_all(session=session)
+        logger.info("Rolled back everything!")
+
+        try:
+            s3_bucket = get_s3_storage()
+            logger.info("Closing S3 storage...")
+            await s3_bucket.close()
+        except Exception as exc:
+            logger.exception(exc)
+            logger.warning("Failed to close S3 storage")

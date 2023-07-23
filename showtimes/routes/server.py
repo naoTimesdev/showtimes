@@ -47,6 +47,20 @@ async def server_claim_post(claim_request: ServerClaimRequest):
     if claim_latch.claimed:
         return ResponseType(error="Server already claimed", code=400).to_orjson(400)
 
+    if not claim_request.username:
+        return ResponseType(error="Username cannot be empty", code=400).to_orjson(400)
+
+    if not claim_request.password:
+        return ResponseType(error="Password cannot be empty", code=400).to_orjson(400)
+
+    if len(claim_request.password) < 8:
+        return ResponseType(error="Password must be at least 8 characters long", code=400).to_orjson(400)
+    if len(claim_request.password) > 128:
+        return ResponseType(error="Password must be at most 128 characters long", code=400).to_orjson(400)
+
+    if len(claim_request.username) < 4:
+        return ResponseType(error="Username must be at least 4 characters long", code=400).to_orjson(400)
+
     # Claim server
     user_admin = ShowtimesUser(
         username=claim_request.username,

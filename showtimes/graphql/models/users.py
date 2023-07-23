@@ -27,7 +27,7 @@ from showtimes.models.database import ShowtimesTemporaryUser, ShowtimesUser, Sho
 from showtimes.models.session import UserSession
 from showtimes.utils import make_uuid
 
-from .common import ImageMetadataGQL, IntegrationGQL
+from .common import ImageMetadataGQL
 from .enums import UserTempTypeGQL, UserTypeGQL
 
 __all__ = (
@@ -62,8 +62,6 @@ class UserGQL:
     """The user username"""
     privilege: UserTypeGQL = gql.field(description="The user's privilege level")
     """The user privilege level"""
-    integrations: list[IntegrationGQL] = gql.field(description="The user's integrations information")
-    """The user integrations information"""
     avatar: Optional[ImageMetadataGQL] = gql.field(description="The user's avatar URL")
     """The user avatar information"""
 
@@ -85,7 +83,6 @@ class UserGQL:
             id=user.user_id,
             username=user.username,
             privilege=user.privilege,
-            integrations=[IntegrationGQL.from_db(integration) for integration in user.integrations],
             avatar=ImageMetadataGQL.from_db(user.avatar) if user.avatar else None,
             user_id=str(cast(PydanticObjectId, user.id)),
             discord_meta=discord_meta,

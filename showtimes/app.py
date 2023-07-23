@@ -24,6 +24,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException,
 from fastapi.datastructures import Default
 from strawberry.exceptions import StrawberryGraphQLError
 
+from showtimes.controllers.anilist import get_anilist_client, init_anilist_client
 from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
 from showtimes.controllers.redisdb import get_redis, init_redis_client
@@ -31,6 +32,8 @@ from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.sessions.errors import SessionError
 from showtimes.controllers.sessions.handler import check_session, create_session_handler, get_session_handler
 from showtimes.controllers.storages import S3Storage, get_s3_storage, init_s3_storage
+from showtimes.controllers.tmdb import get_tmdb_client, init_tmdb_client
+from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.extensions.fastapi.discovery import discover_routes
 from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.extensions.fastapi.lock import get_ready_status
@@ -132,7 +135,17 @@ async def app_on_startup(run_production: bool = True):
 
     await init_searcher(MEILI_URL, MEILI_API_KEY)
     logger.info("Meilisearch client instances created!")
+
+    # Initialize other stuff here
+    logger.info("Creating Anilist client instances...")
+    await init_anilist_client()
+    TMDB_API_KEY = env_config.get("TMDB_API_KEY")
+    if TMDB_API_KEY is not None:
+        logger.info("Creating TMDb client instances...")
+        await init_tmdb_client(TMDB_API_KEY)
+
     # Ready latch
+    logger.info("Server is ready!")
     get_ready_status().ready()
 
 
@@ -145,7 +158,7 @@ async def app_on_shutdown():
         logger.info("Closing Redis client instances...")
         await redis_client.close()
         logger.info("Closed Redis client instances!")
-    except RuntimeError:
+    except ShowtimesControllerUninitializedError:
         pass
 
     try:
@@ -159,7 +172,7 @@ async def app_on_shutdown():
     stor_s3: S3Storage | None = None
     try:
         stor_s3 = get_s3_storage()
-    except RuntimeError:
+    except ShowtimesControllerUninitializedError:
         pass
 
     if stor_s3 is not None:
@@ -168,11 +181,27 @@ async def app_on_shutdown():
         logger.info("Closed S3 storage!")
 
     try:
-        redis_client = get_searcher()
+        meili_client = get_searcher()
         logger.info("Closing Meilisearch client instances...")
-        await redis_client.close()
+        await meili_client.close()
         logger.info("Closed Meilisearch client instances!")
-    except RuntimeError:
+    except ShowtimesControllerUninitializedError:
+        pass
+
+    try:
+        anilist_client = get_anilist_client()
+        logger.info("Closing Anilist client instances...")
+        await anilist_client.close()
+        logger.info("Closed Anilist client instances!")
+    except ShowtimesControllerUninitializedError:
+        pass
+
+    try:
+        tmdb_client = get_tmdb_client()
+        logger.info("Closing TMDb client instances...")
+        await tmdb_client.close()
+        logger.info("Closed TMDb client instances!")
+    except ShowtimesControllerUninitializedError:
         pass
 
 

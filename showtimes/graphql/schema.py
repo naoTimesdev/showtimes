@@ -50,7 +50,9 @@ class _SchemaParam(TypedDict):
 
 @gql.type
 class Query:
-    search: QuerySearch = gql.field(description="Do a search on external source or internal database")
+    search: QuerySearch = gql.field(
+        description="Do a search on external source or internal database", resolver=QuerySearch
+    )
 
 
 @gql.type

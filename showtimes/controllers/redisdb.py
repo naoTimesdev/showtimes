@@ -26,6 +26,8 @@ import orjson
 from bson import ObjectId
 from redis import asyncio as aioredis
 
+from showtimes.errors import ShowtimesControllerUninitializedError
+
 __all__ = (
     "RedisDatabase",
     "init_redis_client",
@@ -436,6 +438,6 @@ def get_redis() -> RedisDatabase:
     global _REDIS_CLIENT
 
     if _REDIS_CLIENT is None:
-        raise RuntimeError("Redis client is not initialized!")
+        raise ShowtimesControllerUninitializedError("Redis Client")
 
     return _REDIS_CLIENT

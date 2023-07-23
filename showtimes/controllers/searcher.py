@@ -24,6 +24,7 @@ from meilisearch_python_async.errors import MeilisearchApiError, MeilisearchComm
 from meilisearch_python_async.models.search import SearchResults
 from msgspec import Struct
 
+from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.models.searchdb import SchemaAble
 from showtimes.tooling import get_logger
 
@@ -159,7 +160,7 @@ def get_searcher() -> ShowtimesSearcher:
     global _SHOWTIMES_SEARCHER
 
     if _SHOWTIMES_SEARCHER is None:
-        raise RuntimeError("ShowtimesSearcher has not been initialized.")
+        raise ShowtimesControllerUninitializedError("Showtimes Searcher")
 
     return _SHOWTIMES_SEARCHER
 

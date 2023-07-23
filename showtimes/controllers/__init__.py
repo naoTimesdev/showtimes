@@ -17,3 +17,4 @@ from .redisdb import *
 from .searcher import *
 from .security import *
 from .storages import *
+from .tmdb import *

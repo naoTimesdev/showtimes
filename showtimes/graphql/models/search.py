@@ -20,7 +20,7 @@ from typing import Optional
 
 import strawberry as gql
 
-from showtimes.graphql.models.enums import SearchExternalTypeGQL
+from showtimes.graphql.models.enums import SearchExternalTypeGQL, SearchSourceTypeGQL
 
 __all__ = (
     "SearchResultTitle",
@@ -46,6 +46,7 @@ class SearchResult:
     year: Optional[int] = gql.field(description="The starting year of the result")
     cover_url: Optional[str] = gql.field(description="The cover URL of the result")
     count: Optional[int] = gql.field(description="The count of the result")
+    source: SearchSourceTypeGQL = gql.field(description="The source of the result")
 
 
 @gql.type(description="Simple search results from external source")

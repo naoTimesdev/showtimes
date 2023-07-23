@@ -22,7 +22,13 @@ import strawberry as gql
 
 from showtimes.models.database import ShowtimesTempUserType, UserType
 
-__all__ = ("UserTypeGQL", "UserTempTypeGQL", "SearchExternalTypeGQL")
+__all__ = (
+    "UserTypeGQL",
+    "UserTempTypeGQL",
+    "SearchExternalTypeGQL",
+    "SearchTitleTypeGQL",
+    "SearchSourceTypeGQL",
+)
 
 UserTypeGQL = gql.enum(
     UserType,
@@ -39,6 +45,7 @@ UserTempTypeGQL = gql.enum(
 @gql.enum(name="SearchExternalType", description="The external search type")
 class SearchExternalTypeGQL(Enum):
     SHOWS = "shows"
+    MOVIE = "movie"
     BOOKS = "books"
     UNKNOWN = "unknown"
 
@@ -48,3 +55,11 @@ class SearchTitleTypeGQL(Enum):
     ENGLISH = "english"
     ROMANIZED = "romanized"
     NATIVE = "native"
+
+
+@gql.enum(name="SearchSourceType", description="The source type of the search result")
+class SearchSourceTypeGQL(Enum):
+    ANILIST = "anilist"
+    TMDB = "tmdb"
+    DATABASE = "database"
+    UNKNOWN = "unknown"

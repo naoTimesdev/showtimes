@@ -49,7 +49,7 @@ async def mutate_login_user(
     username: str,
     password: str,
 ) -> ResultOrT[UserGQL]:
-    user = await ShowtimesUserGroup.find_one(ShowtimesUserGroup.username == username)
+    user = await ShowtimesUserGroup.find_one(ShowtimesUserGroup.username == username, with_children=True)
     if not user:
         return False, "User with associated username not found", ErrorCode.UserNotFound
     if user.is_temp_user():
@@ -77,6 +77,11 @@ async def mutate_register_user(
     )
     if regist_user:
         return True, UserTemporaryGQL.from_db(regist_user), None
+
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long", ErrorCode.UserRequirementPass
+    if len(username) < 4:
+        return False, "Username must be at least 4 characters long", ErrorCode.UserRequirementUsername
 
     user = await ShowtimesUser.find_one(ShowtimesUser.username == username)
     if user:
@@ -194,6 +199,9 @@ async def mutate_reset_password(
         return False, "User has no password set, please do password reset first", ErrorCode.UserMigrate
     if old_password == new_password:
         return False, "New password cannot be the same as old password", ErrorCode.UserRepeatOld
+
+    if len(new_password) < 8:
+        return False, "New password must be at least 8 characters long", ErrorCode.UserRequirementPass
 
     is_verify, _ = await verify_password(old_password, user.password)
     if not is_verify:

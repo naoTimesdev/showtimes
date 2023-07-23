@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Optional, cast
 
 import aiohttp
 
+from showtimes.errors import ShowtimesControllerUninitializedError
+
 from ..utils import complex_walk
 from .gqlapi import GraphQLClient, GraphQLResult
 from .ratelimiter import NetworkRateLimiter
@@ -110,7 +112,7 @@ _ANILIST_CLIENT: Optional[AnilistAPI] = None
 def get_anilist_client():
     global _ANILIST_CLIENT
     if _ANILIST_CLIENT is None:
-        raise Exception("Anilist client is not initialized")
+        raise ShowtimesControllerUninitializedError(name="Anilist Client")
     return _ANILIST_CLIENT
 
 

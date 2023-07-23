@@ -29,7 +29,7 @@ __all__ = (
 )
 
 
-@gql.type(description="Simple result of mutation")
+@gql.type(description="Simple result of mutation or an error")
 class Result:
     success: bool = gql.field(description="Success status")
     message: Optional[str] = gql.field(description="Extra message if any, might be available if success is False")
@@ -43,6 +43,8 @@ class ErrorCode:
     UserMigrate = "USER_NEED_MIGRATE"
     UserApprovalIncorrect = "USER_APPROVAL_INCORRECT"
     UserInvalidPass = "USER_INVALID_PASSWORD"
+    UserRequirementPass = "USER_REQUIREMENT_PASSWORD"
+    UserRequirementUsername = "USER_REQUIREMENT_USERNAME"
     UserInvalidOldPass = "USER_INVALID_OLD_PASSWORD"
     UserRepeatOld = "USER_REPEAT_OLD_PASSWORD"
     SessionExist = "SESSION_EXIST"
@@ -50,6 +52,8 @@ class ErrorCode:
     SessionNotMaster = "SESSION_NOT_MASTER"
     AnilistAPIError = "ANILIST_API_ERROR"
     AnilistAPIUnavailable = "ANILIST_API_UNAVAILABLE"
+    TMDbAPIUnavailable = "TMDB_API_UNAVAILABLE"
+    TMDbAPIError = "TMDB_API_ERROR"
 
 
 UserResult = gql.union(

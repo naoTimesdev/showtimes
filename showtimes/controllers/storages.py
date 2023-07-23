@@ -40,6 +40,7 @@ from aiopath import AsyncPath
 from pendulum.datetime import DateTime
 from types_aiobotocore_s3 import S3Client
 
+from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.tooling import get_logger
 
 __all__ = (
@@ -542,7 +543,7 @@ def get_s3_storage() -> S3Storage:
     global _GLOBAL_S3SERVER
 
     if _GLOBAL_S3SERVER is None:
-        raise RuntimeError("S3 storage not created, call init_s3_storage first")
+        raise ShowtimesControllerUninitializedError("S3 Storage")
 
     return _GLOBAL_S3SERVER
 

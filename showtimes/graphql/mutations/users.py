@@ -159,7 +159,7 @@ async def mutate_migrate_user_approve(
     password: str,
     approval_code: str,
 ) -> ResultOrT[UserGQL]:
-    user = await ShowtimesTemporaryUser.find_one(
+    user: ShowtimesTemporaryUser | None = await ShowtimesTemporaryUser.find_one(
         ShowtimesTemporaryUser.username == username,
         ShowtimesTemporaryUser.type == ShowtimesTempUserType.MIGRATION,
     )
@@ -169,19 +169,15 @@ async def mutate_migrate_user_approve(
     if user.approval_code != approval_code:
         return False, "Approval code is not correct", ErrorCode.UserApprovalIncorrect
 
-    is_verify, _ = await verify_password(password, user.password)
-    if not is_verify:
-        return False, "Password is not correct", ErrorCode.UserInvalidPass
-
     new_user = ShowtimesUser(
+        id=user.id,
         username=user.username,
+        password=await encrypt_password(password),
         privilege=UserType.USER,
-        password=user.password,
         user_id=user.user_id,
     )
-
-    await new_user.save()  # type: ignore
     await user.delete()  # type: ignore
+    await new_user.save()  # type: ignore
 
     return True, UserGQL.from_db(new_user), None
 

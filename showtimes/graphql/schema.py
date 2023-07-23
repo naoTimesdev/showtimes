@@ -20,6 +20,7 @@ from typing import Type, TypedDict, Union, cast
 from uuid import UUID
 
 import strawberry as gql
+from bson import ObjectId
 from strawberry.file_uploads import Upload
 from strawberry.types import Info
 
@@ -27,7 +28,9 @@ from showtimes.controllers.sessions.handler import is_master_session
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
-from showtimes.graphql.queries.search import QuerySearch
+from showtimes.graphql.models.servers import ServerGQL
+from showtimes.models.database import ShowtimesServer, ShowtimesUser, UserType
+from showtimes.models.session import ServerSessionInfo
 
 from .models import ErrorCode, Result, UserGQL, UserTemporaryGQL
 from .mutations.users import (
@@ -38,6 +41,8 @@ from .mutations.users import (
     mutate_register_user_approve,
     mutate_reset_password,
 )
+from .queries.search import QuerySearch
+from .queries.showtimes import resolve_server_fetch
 
 __all__ = ("make_schema",)
 
@@ -53,6 +58,55 @@ class Query:
     search: QuerySearch = gql.field(
         description="Do a search on external source or internal database", resolver=QuerySearch
     )
+
+    @gql.field(description="Get current logged in user")
+    async def user(self, info: Info[SessionQLContext, None]) -> Union[UserGQL, Result]:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        if is_master_session(info.context.user):
+            # If master session, return temporary info
+            return UserGQL(
+                id=info.context.user.session_id,
+                username=info.context.user.username,
+                privilege=UserType.ADMIN,
+                avatar=None,
+                user_id=info.context.user.user_id,
+                discord_meta=None,
+            )
+
+        user_info = await ShowtimesUser.find_one(ShowtimesUser.id == ObjectId(info.context.user.object_id))
+        if user_info is None:
+            info.context.session_latch = True
+            info.context.user = None
+            return Result(success=False, message="User not found", code=ErrorCode.UserNotFound)
+
+        return UserGQL.from_db(user_info)
+
+    @gql.field(description="Get server info")
+    async def server(self, info: Info[SessionQLContext, None], id: UUID | None = None) -> Union[ServerGQL, Result]:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        srv_id = None
+        if info.context.user.active is not None:
+            srv_id = info.context.user.active.server_id
+        if id is not None:
+            srv_id = str(id)
+
+        if srv_id is None:
+            return Result(
+                success=False,
+                message="No server selected, either use mutation selectServer or add id param to this query",
+                code=ErrorCode.ServerUnselect,
+            )
+
+        success, srv_info, err_code = await resolve_server_fetch(srv_id)
+        if not success and isinstance(srv_info, str):
+            return Result(success=False, message=srv_info, code=err_code)
+
+        srv_cast = ServerGQL.from_db(cast(ShowtimesServer, srv_info))
+        return srv_cast
 
 
 @gql.type
@@ -141,7 +195,7 @@ class Mutation:
         info.context.user = None
         return Result(success=True, message=None, code=None)
 
-    @gql.mutation(description="Login to Showtimes")
+    @gql.mutation(description="Reset password of an account")
     async def reset_password(
         self, old_password: str, new_password: str, info: Info[SessionQLContext, None]
     ) -> Union[UserGQL, Result]:
@@ -154,6 +208,28 @@ class Mutation:
         info.context.session_latch = True
         info.context.user = user_info.to_session()
         return user_info
+
+    @gql.mutation(description="Select or deselect an active server for an account")
+    async def select_server(self, info: Info[SessionQLContext, None], id: UUID | None = None) -> Result:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+        if id is None:
+            info.context.user.active = None
+            info.context.session_latch = True
+            return Result(success=True, message=None, code=None)
+
+        success, srv_info, err_code = await resolve_server_fetch(str(id))
+        if not success and isinstance(srv_info, str):
+            return Result(success=False, message=srv_info, code=err_code)
+        srv_info = cast(ShowtimesServer, srv_info)
+        owner_ref_ids = [str(i.ref.id) for i in srv_info.owners]
+        if info.context.user.privilege != UserType.ADMIN and info.context.user.object_id not in owner_ref_ids:
+            return Result(
+                success=False, message="You are not one of the owner of this server", code=ErrorCode.ServerNotAllowed
+            )
+        info.context.session_latch = True
+        info.context.user.active = ServerSessionInfo(server_id=str(srv_info.server_id), name=srv_info.name)
+        return Result(success=True, message=None, code=None)
 
 
 @gql.type

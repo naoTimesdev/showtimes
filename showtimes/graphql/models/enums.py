@@ -20,11 +20,12 @@ from enum import Enum
 
 import strawberry as gql
 
-from showtimes.models.database import ShowtimesTempUserType, UserType
+from showtimes.models.database import ShowExternalType, ShowtimesTempUserType, UserType
 
 __all__ = (
     "UserTypeGQL",
     "UserTempTypeGQL",
+    "ProjectExternalTypeGQL",
     "SearchExternalTypeGQL",
     "SearchTitleTypeGQL",
     "SearchSourceTypeGQL",
@@ -39,6 +40,11 @@ UserTempTypeGQL = gql.enum(
     ShowtimesTempUserType,
     name="UserTempType",
     description="The temporary user type",
+)
+ProjectExternalTypeGQL = gql.enum(
+    ShowExternalType,
+    name="ProjectExternalType",
+    description="The external project type or source type",
 )
 
 

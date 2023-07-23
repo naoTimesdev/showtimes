@@ -16,15 +16,19 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import NewType
+from typing import NewType, cast
 from uuid import UUID as UUIDMod  # noqa: N811
 
 import strawberry as gql
+from pendulum.datetime import DateTime as PendulumDT
+from pendulum.parser import parse as pendulum_parse
 
 __all__ = (
     "UUID",
     "Upload",
     "UploadType",
+    "UNIXTimestamp",
+    "DateTime",
 )
 
 
@@ -42,4 +46,19 @@ Upload = gql.scalar(
     name="Upload",
     description="A file to be uploaded (`bytes` data) [mutation only]",
     parse_value=lambda x: x,
+)
+
+UNIXTimestamp = gql.scalar(
+    int,
+    name="UNIX",
+    description="A UNIX timestamp",
+    serialize=lambda x: int(x),
+    parse_value=lambda x: int(x),
+)
+DateTime = gql.scalar(
+    NewType("DateTime", PendulumDT),
+    name="DateTime",
+    description="A datetime string, formatted in ISO 8601",
+    serialize=lambda x: cast(PendulumDT, x).to_iso8601_string(),
+    parse_value=lambda x: pendulum_parse(x),
 )

@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 from showtimes.models.database import (
     RoleActor,
     ShowExternalAnilist,
+    ShowExternalData,
     ShowExternalTMDB,
     ShowProject,
     ShowtimesCollaboration,
@@ -38,6 +39,7 @@ from showtimes.models.database import (
     ShowtimesServer,
     ShowtimesTemporaryUser,
     ShowtimesUser,
+    ShowtimesUserGroup,
 )
 
 __all__ = ("ShowtimesDatabase",)
@@ -128,8 +130,10 @@ class ShowtimesDatabase:
                 RoleActor,
                 ShowExternalAnilist,
                 ShowExternalTMDB,
+                ShowExternalData,
                 ShowProject,
                 ShowtimesServer,
+                ShowtimesUserGroup,
                 ShowtimesUser,
                 ShowtimesTemporaryUser,
                 ShowtimesCollaboration,

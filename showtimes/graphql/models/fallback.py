@@ -54,6 +54,10 @@ class ErrorCode:
     AnilistAPIUnavailable = "ANILIST_API_UNAVAILABLE"
     TMDbAPIUnavailable = "TMDB_API_UNAVAILABLE"
     TMDbAPIError = "TMDB_API_ERROR"
+    ServerUnselect = "SERVER_UNSELECT"
+    ServerNotFound = "SERVER_NOT_FOUND"
+    ServerNotAllowed = "SERVER_NOT_ALLOWED"
+    ServerError = "SERVER_ERROR"
 
 
 UserResult = gql.union(

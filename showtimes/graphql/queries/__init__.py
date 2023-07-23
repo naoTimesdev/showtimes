@@ -8,3 +8,4 @@ The query handler for showtimes.
 """
 
 from .search import *
+from .showtimes import *

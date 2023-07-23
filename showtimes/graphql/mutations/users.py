@@ -16,14 +16,20 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import Literal, Tuple, TypeVar, Union
+from typing import Literal, Tuple, TypeVar, Union, cast
 from uuid import UUID
 
 from showtimes.controllers.security import encrypt_password, verify_password
 from showtimes.graphql.models import UserGQL
 from showtimes.graphql.models.fallback import ErrorCode
 from showtimes.graphql.models.users import UserTemporaryGQL
-from showtimes.models.database import ShowtimesTemporaryUser, ShowtimesTempUserType, ShowtimesUser, UserType
+from showtimes.models.database import (
+    ShowtimesTemporaryUser,
+    ShowtimesTempUserType,
+    ShowtimesUser,
+    ShowtimesUserGroup,
+    UserType,
+)
 
 ResultT = TypeVar("ResultT")
 ResultOrT = Union[Tuple[Literal[False], str, str], Tuple[Literal[True], ResultT, None]]
@@ -43,9 +49,12 @@ async def mutate_login_user(
     username: str,
     password: str,
 ) -> ResultOrT[UserGQL]:
-    user = await ShowtimesUser.find_one(ShowtimesUser.username == username)
+    user = await ShowtimesUserGroup.find_one(ShowtimesUserGroup.username == username)
     if not user:
-        return False, "User with associated email not found", ErrorCode.UserNotFound
+        return False, "User with associated username not found", ErrorCode.UserNotFound
+    if user.is_temp_user():
+        return False, "User is temporary user, please do password reset first", ErrorCode.UserMigrate
+    user = cast(ShowtimesUser, user)
     if user.password is None:
         return False, "User has no password set, please do password reset first", ErrorCode.UserMigrate
 

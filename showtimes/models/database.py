@@ -326,6 +326,12 @@ class ShowtimesUserGroup(Document):
         is_root = True
         use_state_management = True
 
+    def is_temp_user(self) -> bool:
+        """
+        Check if the user is a temporary user.
+        """
+        return self.cls_id == _UserDocType.TEMPUSER
+
 
 class ShowtimesUser(ShowtimesUserGroup):
     """

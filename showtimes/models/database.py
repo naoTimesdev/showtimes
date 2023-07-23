@@ -20,12 +20,14 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from beanie import Document, Insert, Link, Replace, SaveChanges, Update, before_event
+from beanie import Document, Insert, Link, Replace, Save, SaveChanges, Update, ValidateOnSave, before_event
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
 from ..utils import generate_custom_code, make_uuid
 from ._doc import _coerce_to_pendulum, pendulum_utc
+
+AllEvent = [Insert, Replace, Update, Save, SaveChanges, ValidateOnSave]
 
 
 class ImageMetadata(BaseModel):
@@ -306,13 +308,30 @@ class ShowtimesUserDiscord(BaseModel):
     expires_at: float
 
 
-class ShowtimesUser(Document):
+class _UserDocType(str, Enum):
+    USER = "USER"
+    TEMPUSER = "TEMPUSER"
+    UNKNOWN = "UNKNOWN"
+
+
+class ShowtimesUserGroup(Document):
+    username: str
+    """The username or the name of the user."""
+    cls_id: _UserDocType = Field(default=_UserDocType.UNKNOWN)
+    """The class ID of the user, used for inheritance."""
+    user_id: UUID = Field(default_factory=make_uuid)
+
+    class Settings:
+        name = "ShowtimesUsers"
+        is_root = True
+        use_state_management = True
+
+
+class ShowtimesUser(ShowtimesUserGroup):
     """
     The user authentication and more.
     """
 
-    username: str
-    """The username or the name of the user."""
     privilege: UserType
     """The privilege of the user."""
     password: Optional[str] = None
@@ -326,16 +345,11 @@ class ShowtimesUser(Document):
     api_key: Optional[str] = None
     """Authentication API key"""
 
-    user_id: UUID = Field(default_factory=make_uuid)
-
-    @before_event(Insert, Replace, Update, SaveChanges)
+    @before_event(*AllEvent)
     def make_sure(self):
+        self.cls_id = _UserDocType.USER
         if self.password is None and self.discord_meta is None:
             raise ValueError("Password or Discord metadata must be provided.")
-
-    class Settings:
-        name = "ShowtimesUsers"
-        use_state_management = True
 
 
 class ShowtimesTempUserType(str, Enum):
@@ -349,21 +363,33 @@ class ShowtimesTempUserType(str, Enum):
     """Old user migration that does not have password or discord_meta"""
 
 
-class ShowtimesTemporaryUser(Document):
+class ShowtimesTemporaryUser(ShowtimesUserGroup):
     """
     A temporary model to hold the register information.
     """
 
-    username: str
     password: str
+    """:class:`str`: The password of the user."""
     type: ShowtimesTempUserType
+    """:class:`ShowtimesTempUserType`: The type of the temporary user."""
 
     approval_code: str = Field(default_factory=lambda: generate_custom_code(16, True, True))
-    user_id: UUID = Field(default_factory=make_uuid)
+    """:class:`str`: The approval code of the user."""
 
-    class Settings:
-        name = "ShowtimesTemporaryUser"
-        use_state_management = True
+    @before_event(*AllEvent)
+    def persist_type(self):
+        self.cls_id = _UserDocType.TEMPUSER
+
+    def to_user(self, hashed_password: str | None = None) -> ShowtimesUser:
+        """
+        Convert the temporary user to a real user.
+        """
+        return ShowtimesUser(
+            username=self.username,
+            password=hashed_password or self.password,
+            privilege=UserType.USER,
+            user_id=self.user_id,
+        )
 
 
 class ShowtimesServer(Document):
@@ -379,7 +405,7 @@ class ShowtimesServer(Document):
     """The projects of this server."""
     integrations: list[IntegrationId] = Field(default_factory=list)
     """The integrations of this server."""
-    owners: list[Link[ShowtimesUser]] = Field(default_factory=list)
+    owners: list[Link[ShowtimesUserGroup]] = Field(default_factory=list)
     """The owners of this server."""
     avatar: Optional[ImageMetadata] = None
     """The avatar link of this server."""

@@ -33,6 +33,8 @@ from showtimes.models.database import (
     ShowExternalAnilist,
     ShowExternalTMDB,
     ShowProject,
+    ShowtimesCollaboration,
+    ShowtimesCollaborationLinkSync,
     ShowtimesServer,
     ShowtimesTemporaryUser,
     ShowtimesUser,
@@ -130,5 +132,7 @@ class ShowtimesDatabase:
                 ShowtimesServer,
                 ShowtimesUser,
                 ShowtimesTemporaryUser,
+                ShowtimesCollaboration,
+                ShowtimesCollaborationLinkSync,
             ],  # type: ignore
         )

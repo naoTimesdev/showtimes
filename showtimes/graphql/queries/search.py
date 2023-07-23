@@ -216,7 +216,7 @@ async def do_tmdb_search(
             season=None,
             year=result.year or -1,
             cover_url=result.poster_url,
-            count=None,
+            count=1 if result.media_type.value == "movie" else None,
             source=SearchSourceTypeGQL.TMDB,
         )
         parsed_results.append(result)

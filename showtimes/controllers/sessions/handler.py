@@ -105,7 +105,7 @@ class SessionHandler:
         except BackendError:
             await self.set_session(data, response)
 
-    async def reset_user_api(self, api_key: str):
+    async def revoke_user_api(self, api_key: str):
         await self.backend.delete(f"|apimode|{api_key}")
 
     async def reset_api(self):
@@ -126,9 +126,8 @@ class SessionHandler:
             samesite=self.params.samesite.value,
         )
 
-    async def remove_session(self, session_id: Union[str, UUID], response: Optional[Response] = None):
-        as_uuid = UUID(session_id) if isinstance(session_id, str) else session_id
-        await self.backend.delete(session_id=as_uuid)
+    async def remove_session(self, session: UserSession, response: Optional[Response] = None):
+        await self.backend.delete(self._make_key(session))
         if response is not None:
             self.remove_cookie(response)
 

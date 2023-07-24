@@ -39,6 +39,7 @@ from showtimes.models.database import (
 from .common import ImageMetadataGQL, IntegrationGQL
 
 __all__ = (
+    "PartialServerInterface",
     "PartialServerGQL",
     "ShowPosterGQL",
     "ProjectExternalEpisodeGQL",
@@ -53,8 +54,8 @@ __all__ = (
 )
 
 
-@gql.interface(name="PartialServer", description="The partial server information")
-class PartialServerGQL:
+@gql.interface(name="PartialServerInterface", description="The partial server information")
+class PartialServerInterface:
     id: UUID = gql.field(description="The server ID")
     """The server ID"""
     name: str = gql.field(description="The server name")
@@ -66,6 +67,9 @@ class PartialServerGQL:
     project_links: gql.Private[list[str]]  # ObjectId
     owner_links: gql.Private[list[str]]  # ObjectId
 
+
+@gql.type(name="PartialServer", description="The partial server information")
+class PartialServerGQL(PartialServerInterface):
     @classmethod
     def from_db(cls: Type[PartialServerGQL], server: ShowtimesServer):
         return cls(
@@ -218,8 +222,8 @@ class ProjectStatusGQL:
         )
 
 
-@gql.interface(name="PartialProject", description="The partial project information")
-class PartialProjectGQL:
+@gql.interface(name="PartialProjectInterface", description="The partial project information")
+class PartialProjectInterface:
     id: UUID = gql.field(description="The project ID")
     """The project ID"""
     title: str = gql.field(description="The project title")
@@ -238,6 +242,9 @@ class PartialProjectGQL:
     project_id: gql.Private[str]  # ObjectId
     ex_proj_id: gql.Private[str]  # ObjectId
 
+
+@gql.type(name="PartialProject", description="The partial project information")
+class PartialProjectGQL(PartialProjectInterface):
     @gql.field(description="The project external information")
     async def external(self) -> ProjectExternalGQL:
         external_info = await ShowExternalData.find_one(ShowExternalData.id == ObjectId(self.ex_proj_id))
@@ -252,7 +259,9 @@ class PartialProjectGQL:
             raise ValueError("Unknown project external type")
 
     @classmethod
-    def from_db(cls: Type[PartialProjectGQL], project: ShowProject, *, only_latest: bool = False):
+    def from_db(
+        cls: Type[PartialProjectGQL], project: ShowProject, *, only_latest: bool = False
+    ) -> "PartialProjectGQL":
         statuses: list[ProjectStatusGQL] = [ProjectStatusGQL.from_db(status) for status in project.statuses]
         if only_latest:
             _found_latest: ProjectStatusGQL | None = None

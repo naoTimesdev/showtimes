@@ -26,13 +26,13 @@ from showtimes.graphql.models.collab import ProjectCollabLinkGQL
 from showtimes.models.database import ShowProject, ShowtimesCollaborationLinkSync
 
 from .common import ImageMetadataGQL, IntegrationGQL
-from .partials import PartialProjectGQL, ProjectAssigneeGQL, ProjectStatusGQL, ShowPosterGQL
+from .partials import PartialProjectInterface, ProjectAssigneeGQL, ProjectStatusGQL, ShowPosterGQL
 
 __all__ = ("ProjectGQL",)
 
 
 @gql.type(name="Project", description="The project information")
-class ProjectGQL(PartialProjectGQL):
+class ProjectGQL(PartialProjectInterface):
     @gql.field(description="The project collaboration sync status")
     async def collaborations(self) -> ProjectCollabLinkGQL | None:
         collab_sync = await ShowtimesCollaborationLinkSync.find_one(

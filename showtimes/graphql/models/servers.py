@@ -31,7 +31,7 @@ from showtimes.models.database import (
 )
 
 from .common import ImageMetadataGQL
-from .partials import PartialServerGQL
+from .partials import PartialServerInterface
 from .projects import ProjectGQL
 from .users import UserGQL, UserTemporaryGQL
 
@@ -39,7 +39,7 @@ __all__ = ("ServerGQL",)
 
 
 @gql.type(name="Server", description="The server information")
-class ServerGQL(PartialServerGQL):
+class ServerGQL(PartialServerInterface):
     @classmethod
     def from_db(cls: Type[ServerGQL], server: ShowtimesServer):
         return cls(

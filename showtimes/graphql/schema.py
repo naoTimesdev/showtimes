@@ -386,3 +386,7 @@ def make_schema() -> gql.Schema:
             Upload: UploadGQL,
         },
     )
+
+
+# Compatibility with strawberry GraphQL Schema Export
+schema = make_schema()

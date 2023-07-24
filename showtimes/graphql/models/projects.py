@@ -37,8 +37,8 @@ class ProjectGQL(PartialProjectGQL):
     async def collaborations(self) -> ProjectCollabLinkGQL | None:
         collab_sync = await ShowtimesCollaborationLinkSync.find_one(
             OpAnd(
-                OpIn(ShowtimesCollaborationLinkSync.projects, self.id),
-                OpIn(ShowtimesCollaborationLinkSync.servers, self.server_id),
+                OpIn(ShowtimesCollaborationLinkSync.projects, [self.id]),
+                OpIn(ShowtimesCollaborationLinkSync.servers, [self.server_id]),
             ),
         )
         if collab_sync is None:

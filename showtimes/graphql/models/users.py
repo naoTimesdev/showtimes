@@ -23,16 +23,23 @@ from uuid import UUID
 import strawberry as gql
 from beanie import PydanticObjectId
 
-from showtimes.models.database import ShowtimesTemporaryUser, ShowtimesUser, ShowtimesUserDiscord
+from showtimes.models.database import (
+    ShowtimesServer,
+    ShowtimesTemporaryUser,
+    ShowtimesUser,
+    ShowtimesUserDiscord,
+)
 from showtimes.models.session import UserSession
 from showtimes.utils import make_uuid
 
 from .common import ImageMetadataGQL
 from .enums import UserTempTypeGQL, UserTypeGQL
+from .partials import PartialServerGQL
 
 __all__ = (
     "UserGQL",
     "UserTemporaryGQL",
+    "UserSessionGQL",
 )
 
 
@@ -128,3 +135,30 @@ class UserSessionGQL:
     id: UUID = gql.field(description="The user ID")
     username: str = gql.field(description="The user's username")
     privilege: UserTypeGQL = gql.field(description="The user's privilege level")
+    active_id: UUID | None = gql.field(description="The currently selected active server")
+
+    session_id: gql.Private[UUID]
+    object_id: gql.Private[str]  # ObjectId
+    api_key: gql.Private[Optional[str]]
+
+    @gql.field(description="The currently selected active server")
+    async def active(self) -> PartialServerGQL | None:
+        if not self.active_id:
+            return None
+        server_fetch = await ShowtimesServer.find_one(ShowtimesServer.server_id == self.active_id)
+        if not server_fetch:
+            return None
+
+        return PartialServerGQL.from_db(server_fetch)
+
+    @classmethod
+    def from_session(cls: Type[UserSessionGQL], session: UserSession) -> "UserSessionGQL":
+        return cls(
+            id=UUID(session.user_id),
+            username=session.username,
+            privilege=session.privilege,
+            active_id=UUID(session.active.server_id) if session.active else None,
+            session_id=session.session_id,
+            object_id=session.object_id,
+            api_key=session.api_key,
+        )

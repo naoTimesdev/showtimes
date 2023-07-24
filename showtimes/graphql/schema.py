@@ -36,7 +36,7 @@ from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUse
 from showtimes.models.session import ServerSessionInfo
 from showtimes.utils import make_uuid
 
-from .models import ErrorCode, Result, UserGQL, UserTemporaryGQL
+from .models import ErrorCode, Result, UserGQL, UserSessionGQL, UserTemporaryGQL
 from .mutations.users import (
     mutate_login_user,
     mutate_migrate_user,
@@ -73,6 +73,8 @@ class Query:
     async def session(self, info: Info[SessionQLContext, None]):
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        return UserSessionGQL.from_session(info.context.user)
 
     @gql.field(description="Get current logged in user")
     async def user(self, info: Info[SessionQLContext, None]) -> Union[UserGQL, Result]:

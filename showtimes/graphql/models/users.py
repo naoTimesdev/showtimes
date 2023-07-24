@@ -94,7 +94,6 @@ class UserGQL:
             user_id=str(self.id),
             username=self.username,
             privilege=self.privilege,
-            servers=[],
             object_id=self.user_id,
             discord_meta=self.discord_meta.to_model() if self.discord_meta else None,
         )
@@ -122,3 +121,10 @@ class UserTemporaryGQL:
             type=user.type,
             user_id=str(cast(PydanticObjectId, user.id)),
         )
+
+
+@gql.type(name="UserSession", description="The user session information")
+class UserSessionGQL:
+    id: UUID = gql.field(description="The user ID")
+    username: str = gql.field(description="The user's username")
+    privilege: UserTypeGQL = gql.field(description="The user's privilege level")

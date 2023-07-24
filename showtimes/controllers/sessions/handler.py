@@ -69,6 +69,7 @@ class SessionHandler:
         params: CookieParameters,
         scheme_name: Optional[str] = None,
         backend: SessionBackend,
+        master_session: UserSession,
     ):
         self.model: APIKey = APIKey(
             **{"in": APIKeyIn.cookie},  # type: ignore
@@ -81,16 +82,20 @@ class SessionHandler:
 
         self.backend = backend
 
+        self._master_session = master_session
+
+    def _make_key(self, data: UserSession):
+        if data.api_key is not None:
+            return f"|apimode|{data.api_key}"
+        return str(data.session_id)
+
     async def set_session(self, data: UserSession, response: Optional[Response] = None):
-        await self.backend.create(data.session_id, data)
+        await self.backend.create(self._make_key(data), data)
         if response is not None:
             self.set_cookie(response, data.session_id)
 
-    async def set_api_session(self, data: UserSession):
-        await self.backend.create(f"{self.identifier}|api|{data.user_id}", data)
-
     async def update_session(self, data: UserSession, response: Optional[Response] = None):
-        await self.backend.update(data.session_id, data)
+        await self.backend.update(self._make_key(data), data)
         if response is not None:
             self.set_cookie(response, data.session_id)
 
@@ -99,6 +104,12 @@ class SessionHandler:
             await self.update_session(data, response)
         except BackendError:
             await self.set_session(data, response)
+
+    async def reset_user_api(self, api_key: str):
+        await self.backend.delete(f"|apimode|{api_key}")
+
+    async def reset_api(self):
+        await self.backend.bulk_delete("|apimode|*")
 
     def set_cookie(self, response: Response, session_id: UUID):
         dumps = self.signer.dumps(session_id.hex)
@@ -144,16 +155,16 @@ class SessionHandler:
             auth_header = auth_header[6:]
             master_key = get_env_config()["MASTER_KEY"]
             if auth_header == master_key:
-                return _MASTER_SESSION
+                return self._master_session
 
-            session_auth = await self.backend.read(f"{self.identifier}|api|{auth_header}")
+            session_auth = await self.backend.read(f"|apimode|{auth_header}")
             if session_auth:
                 return session_auth
             user_with_key = await ShowtimesUser.find_one(ShowtimesUser.api_key == auth_header)
             if user_with_key is None:
                 raise SessionError(detail="Unknown API key", status_code=401)
-            user_session = UserSession.from_db(user_with_key, [], is_api_key=True)
-            await self.set_api_session(user_session)
+            user_session = UserSession.from_db(user_with_key)
+            await self.set_session(user_session)
             return user_session
 
         signed_session = request.cookies.get(self.model.name)
@@ -172,7 +183,6 @@ class SessionHandler:
 
 
 _GLOBAL_SESSION_HANDLER: Optional[SessionHandler] = None
-_MASTER_SESSION = UserSession.create_master()
 
 
 async def create_session_handler(
@@ -189,17 +199,27 @@ async def create_session_handler(
     if redis_host:
         backend = RedisBackend(redis_host, redis_port, redis_password)
 
+    MASTER_KEY = get_env_config()["MASTER_KEY"]
+    if MASTER_KEY is None:
+        raise RuntimeError("Master key is not set")
+
     if _GLOBAL_SESSION_HANDLER is None:
         secure = os.getenv("NODE_ENV") == "production"
         cookie_params = CookieParameters(max_age=max_age, secure=secure)
+        MASTER_SESSION = UserSession.create_master(MASTER_KEY)
         session = SessionHandler(
             cookie_name="naotimes|session",
             identifier="naotimes|ident",
             secret_key=secret_key,
             params=cookie_params,
             backend=backend,
+            master_session=MASTER_SESSION,
         )
-        await session.set_api_session(_MASTER_SESSION)
+        # Reset all API sessions
+        await session.reset_api()
+
+        await session.set_session(MASTER_SESSION)
+
         _GLOBAL_SESSION_HANDLER = session
 
 
@@ -218,4 +238,7 @@ async def check_session(request: Union[Request, WebSocket]) -> UserSession:
 
 
 def is_master_session(session: UserSession) -> bool:
-    return session.api_key and session.user_id == _MASTER_SESSION.user_id
+    MASTER_KEY = get_env_config()["MASTER_KEY"]
+    if MASTER_KEY is None:
+        raise RuntimeError("Master key is not set")
+    return session.api_key is not None and session.api_key == MASTER_KEY

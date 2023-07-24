@@ -68,6 +68,11 @@ class Query:
         description="Do a search on external source or internal database", resolver=QuerySearch
     )
 
+    @gql.field(description="Get current user session, different from user query which query user information")
+    async def session(self, info: Info[SessionQLContext, None]):
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
     @gql.field(description="Get current logged in user")
     async def user(self, info: Info[SessionQLContext, None]) -> Union[UserGQL, Result]:
         if info.context.user is None:

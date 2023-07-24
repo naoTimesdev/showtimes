@@ -48,36 +48,31 @@ class UserSession(BaseModel):
     user_id: str
     username: str
     privilege: UserType
-    servers: list[ServerSessionInfo]
     object_id: str  # ObjectId, stringified
     discord_meta: ShowtimesUserDiscord | None = None
     active: ServerSessionInfo | None = None
-    api_key: bool = False
+    api_key: str | None = None
 
     @classmethod
-    def from_db(
-        cls: Type["UserSession"], user: ShowtimesUser, servers: list[ShowtimesServer], is_api_key: bool = False
-    ):
+    def from_db(cls: Type["UserSession"], user: ShowtimesUser, *, api_key: str | None = None):
         return cls(
             session_id=make_uuid(),
             user_id=str(user.user_id),
             username=user.username,
             privilege=user.privilege,
-            servers=[ServerSessionInfo.from_db(server) for server in servers],
             object_id=str(user.id),
             discord_meta=user.discord_meta,
             active=None,
-            api_key=is_api_key,
+            api_key=api_key,
         )
 
     @classmethod
-    def create_master(cls: Type["UserSession"]):
+    def create_master(cls: Type["UserSession"], master_key: str):
         return cls(
             session_id=make_uuid(),
             user_id="-999MASTER",
             username="Master API",
             privilege=UserType.ADMIN,
             object_id="-999",
-            servers=[],
-            api_key=True,
+            api_key=master_key,
         )

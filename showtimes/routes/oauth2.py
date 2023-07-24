@@ -148,7 +148,7 @@ async def oauth2_discord_token_exchange(code: str, state: str):
 
     session = get_session_handler()
     response_object = RedirectResponse(state_data["final_redirect"], status_code=302)
-    await session.set_session(UserSession.from_db(user_db, []), response_object)
+    await session.set_session(UserSession.from_db(user_db), response_object)
     return response_object
 
 

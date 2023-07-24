@@ -80,7 +80,7 @@ class SessionBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def update(self, session_id: UUID, data: UserSession) -> None:
+    async def update(self, session_id: UUID | str, data: UserSession) -> None:
         """
         Update session data on the backend.
 
@@ -99,7 +99,7 @@ class SessionBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def delete(self, session_id: UUID) -> None:
+    async def delete(self, session_id: UUID | str) -> None:
         """
         Delete session data from the backend.
 
@@ -107,6 +107,18 @@ class SessionBackend(ABC):
         ----------
         session_id : UUID
             The session ID to be deleted
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def bulk_delete(self, prefix: str):
+        """
+        Delete session data from the backend by prefix.
+
+        Parameters
+        ----------
+        prefix : str
+            The prefix to be deleted
         """
         raise NotImplementedError
 
@@ -138,6 +150,11 @@ class InMemoryBackend(SessionBackend):
             del self.__SESSIONS[session_id]
         except KeyError:
             pass
+
+    async def bulk_delete(self, prefix: str):
+        for session_id in list(self.__SESSIONS.keys()):
+            if str(session_id).startswith(prefix):
+                await self.delete(session_id)
 
 
 class RedisBackend(SessionBackend):
@@ -199,3 +216,10 @@ class RedisBackend(SessionBackend):
     async def delete(self, session_id: UUID) -> None:
         await self._before_operation()
         await self._client.rm(self._key_prefix + str(session_id))
+
+    async def bulk_delete(self, glob_keys: str):
+        await self._before_operation()
+
+        all_keys = await self._client.keys(self._key_prefix + glob_keys)
+        for key in all_keys:
+            await self._client.rm(key)

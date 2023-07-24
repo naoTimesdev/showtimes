@@ -281,7 +281,7 @@ async def _get_actor_or_create(
     actors: RolesHolder,
     *,
     session,
-) -> tuple[newdb.RoleActor | None, RolesHolder]:
+) -> tuple[Link[newdb.RoleActor] | None, RolesHolder]:
     if assigned_id is None:
         return None, actors
 
@@ -289,7 +289,7 @@ async def _get_actor_or_create(
         return None, actors
 
     if assigned_id in actors:
-        return actors[assigned_id], actors
+        return to_link(actors[assigned_id]), actors
 
     integrations = [
         newdb.IntegrationId(id=str(assigned_id), type=newdb.DefaultIntegrationType.DiscordUser),
@@ -306,7 +306,7 @@ async def _get_actor_or_create(
     if _new_actor is None:
         raise RuntimeError("Failed to add role actor")
     actors[assigned_id] = _new_actor
-    return _new_actor, actors
+    return to_link(_new_actor), actors
 
 
 async def _process_showtimes_project_assignments(
@@ -363,20 +363,13 @@ async def _process_showtimes_project_assignments(
     )
 
     show_actors: list[newdb.ShowActor] = []
-    if TLActor:
-        show_actors.append(newdb.ShowActor(actor=to_link(TLActor), key="TL"))
-    if TLCActor:
-        show_actors.append(newdb.ShowActor(actor=to_link(TLCActor), key="TLC"))
-    if ENCActor:
-        show_actors.append(newdb.ShowActor(actor=to_link(ENCActor), key="ENC"))
-    if EDActor:
-        show_actors.append(newdb.ShowActor(actor=to_link(EDActor), key="ED"))
-    if TSActor:
-        show_actors.append(newdb.ShowActor(actor=to_link(TSActor), key="TS"))
-    if TMActor:
-        show_actors.append(newdb.ShowActor(actor=to_link(TMActor), key="TM"))
-    if QCActor:
-        show_actors.append(newdb.ShowActor(actor=to_link(QCActor), key="QC"))
+    show_actors.append(newdb.ShowActor(actor=TLActor, key="TL"))
+    show_actors.append(newdb.ShowActor(actor=TLCActor, key="TLC"))
+    show_actors.append(newdb.ShowActor(actor=ENCActor, key="ENC"))
+    show_actors.append(newdb.ShowActor(actor=EDActor, key="ED"))
+    show_actors.append(newdb.ShowActor(actor=TSActor, key="TS"))
+    show_actors.append(newdb.ShowActor(actor=TMActor, key="TM"))
+    show_actors.append(newdb.ShowActor(actor=QCActor, key="QC"))
     INVALID_CUSTOM = ["TL", "TLC", "ENC", "ED", "TS", "TM", "QC"]
     for custom in assigness.custom:
         if custom.key in INVALID_CUSTOM:
@@ -388,8 +381,7 @@ async def _process_showtimes_project_assignments(
             actors,
             session=session,
         )
-        if custom_actor:
-            show_actors.append(newdb.ShowActor(actor=to_link(custom_actor), key=custom.key))
+        show_actors.append(newdb.ShowActor(actor=custom_actor, key=custom.key))
     return show_actors, actors
 
 

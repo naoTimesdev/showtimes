@@ -23,6 +23,8 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.datastructures import Default
 from fastapi.middleware import Middleware
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from strawberry.exceptions import StrawberryGraphQLError
 
@@ -56,6 +58,7 @@ __all__ = (
 )
 CURRENT_DIR = Path(__file__).absolute().parent
 ROOT_DIR = CURRENT_DIR.parent
+TEMPLATE_DIR = CURRENT_DIR / "templates"
 _GlobalLogger = setup_logger(ROOT_DIR / "logs" / "server.log")
 
 
@@ -297,6 +300,8 @@ def create_app():
             ),
         ],
     )
+    ASSETS_FOLDER = CURRENT_DIR / "assets"
+    app.mount("/assets", StaticFiles(directory=ASSETS_FOLDER), name="assets")
 
     run_dev = to_boolean(os.environ.get("DEVELOPMENT", "0"))
     env_conf = get_env_config(not run_dev)
@@ -339,6 +344,19 @@ def create_app():
     async def _root_api_welcome():
         ready = get_ready_status().is_ready()
         return ORJSONXResponse(content={"status": "ok" if ready else "waiting"}, status_code=200 if ready else 503)
+
+    @app.get("/claim", include_in_schema=False, response_class=HTMLResponse)
+    async def _root_claim_webpage():
+        claim_stat = get_claim_status()
+        if claim_stat.claimed:
+            return RedirectResponse("/graphql")
+
+        ClaimWebpage = HTMLResponse((TEMPLATE_DIR / "claim.html").read_text())
+        return ClaimWebpage
+
+    @app.route("/favicon.ico", ["GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS"], include_in_schema=False)
+    async def _root_favicon():
+        return FileResponse(ASSETS_FOLDER / "favicon.ico")
 
     logger.info("Backend app created!")
     return app

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Claim Server :: Showtimes API</title>
+        <meta name="description" content="Claim your Showtimes API server">
+        <meta name="theme-color" content="#111827">
+        <meta property="og:title" content="Claim Server">
+        <meta property="og:description" content="Claim your Showtimes API server">
+        <meta property="og:image" content="/assets/favicon.png">
+        <meta property="og:site_name" content="Showtimes API">
+
+        <link rel="icon" type="image/png" href="/assets/favicon.png">
+        <link rel="icon" href="/assets/favicon.ico">
+        <!-- Styles -->
+        <link rel="stylesheet" href="/assets/css/claim.css">
+    </head>
+    <body class="bg-gray-900 text-white">
+        <div class="mt-4 mx-auto flex flex-col items-center">
+            <h1 class="text-center text-3xl font-bold">Claim Server</h1>
+            <div class="flex flex-col mt-4 w-[90vw] md:w-[50vw]">
+                <div class="flex flex-col">
+                    <label for="username" class="text-gray-200 mb-2 tracking-wide font-medium">Username</label>
+                    <input type="text" id="username" name="username" class="bg-gray-700 text-white rounded-md p-2 transition">
+                </div>
+                <div class="flex flex-col mt-3">
+                    <label for="password" class="text-gray-200 mb-2 tracking-wide font-medium">Password</label>
+                    <input type="password" id="password" name="password" class="bg-gray-700 text-white rounded-md p-2 transition">
+                </div>
+                <div class="flex flex-col mt-5">
+                    <button class="submit-btn bg-purple-500 py-2 px-3 rounded-md hover:bg-purple-600 disabled:hover:bg-purple-500 transition font-bold">Claim</button>
+                </div>
+            </div>
+            <div class="mt-4 alert-msg transition-opacity opacity-0 duration-150"></div>
+        </div>
+    </body>
+    <script>
+        "use strict";
+
+        (function (){
+            const State = {
+                submitting: false,
+            };
+            const submitBtn = document.querySelector(".submit-btn");
+            const alertMsg = document.querySelector(".alert-msg");
+
+            function disableBox(query) {
+                const box = document.querySelector(query);
+                box.classList.add("cursor-not-allowed", "opacity-80", "select-none");
+                box.disabled = true;
+            }
+
+            function enableBox(query) {
+                const box = document.querySelector(query);
+                box.classList.remove("cursor-not-allowed", "opacity-80", "select-none")
+                box.disabled = false;
+            }
+
+            function alert(message, color) {
+                alertMsg.textContent = message;
+                alertMsg.classList.remove("opacity-0");
+                alertMsg.classList.add("opacity-100", color);
+            }
+
+            function hideAlert() {
+                alertMsg.classList.add("opacity-0");
+                alertMsg.classList.remove("opacity-100");
+            }
+
+            function processRequest() {
+                if (State.submitting) return;
+                disableBox(".submit-btn");
+                disableBox("#username");
+                disableBox("#password");
+                State.submitting = true;
+                const username = document.getElementById("username").value;
+                const password = document.getElementById("password").value;
+
+                fetch("/server/claim", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    }),
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                })
+                    .then((resp) => resp.json())
+                    .then((data) => {
+                        State.submitting = false;
+                        enableBox(".submit-btn");
+                        enableBox("#username");
+                        enableBox("#password");
+                        if (data.code === 200) {
+                            alert("Successfully claimed server!", "text-green-500");
+                        } else {
+                            alert(data.error, "text-red-500");
+                        }
+                    });
+            }
+
+            submitBtn.addEventListener("click", processRequest);
+        })();
+    </script>
+</html>

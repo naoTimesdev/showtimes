@@ -17,6 +17,7 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from fnmatch import fnmatchcase
 from typing import Optional
 from uuid import UUID
 
@@ -127,25 +128,25 @@ class InMemoryBackend(SessionBackend):
     """Store session inside a memory dictionary."""
 
     def __init__(self) -> None:
-        self.__SESSIONS: dict[UUID, UserSession] = {}
+        self.__SESSIONS: dict[UUID | str, UserSession] = {}
 
     async def shutdown(self) -> None:
         pass
 
-    async def read(self, session_id: UUID) -> Optional[UserSession]:
+    async def read(self, session_id: UUID | str) -> Optional[UserSession]:
         return self.__SESSIONS.get(session_id)
 
-    async def create(self, session_id: UUID, data: UserSession) -> None:
+    async def create(self, session_id: UUID | str, data: UserSession) -> None:
         if self.__SESSIONS.get(session_id) is not None:
             raise BackendError("create can't overwrite an existing session")
         self.__SESSIONS[session_id] = data
 
-    async def update(self, session_id: UUID, data: UserSession) -> None:
+    async def update(self, session_id: UUID | str, data: UserSession) -> None:
         if self.__SESSIONS.get(session_id) is None:
             raise BackendError("session does not exist, cannot update")
         self.__SESSIONS[session_id] = data
 
-    async def delete(self, session_id: UUID) -> None:
+    async def delete(self, session_id: UUID | str) -> None:
         try:
             del self.__SESSIONS[session_id]
         except KeyError:
@@ -153,7 +154,7 @@ class InMemoryBackend(SessionBackend):
 
     async def bulk_delete(self, prefix: str):
         for session_id in list(self.__SESSIONS.keys()):
-            if str(session_id).startswith(prefix):
+            if fnmatchcase(str(session_id), prefix):
                 await self.delete(session_id)
 
 

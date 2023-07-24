@@ -16,15 +16,12 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import Optional, Type, cast
-from uuid import UUID
+from typing import Type, cast
 
 import strawberry as gql
 from beanie.operators import In
 from bson import ObjectId
 
-from showtimes.graphql.models.projects import ProjectGQL
-from showtimes.graphql.models.users import UserGQL, UserTemporaryGQL
 from showtimes.models.database import (
     ShowProject,
     ShowtimesServer,
@@ -34,23 +31,15 @@ from showtimes.models.database import (
 )
 
 from .common import ImageMetadataGQL
+from .partials import PartialServerGQL
+from .projects import ProjectGQL
+from .users import UserGQL, UserTemporaryGQL
 
 __all__ = ("ServerGQL",)
 
 
 @gql.type(name="Server", description="The server information")
-class ServerGQL:
-    id: UUID = gql.field(description="The server ID")
-    """The server ID"""
-    name: str = gql.field(description="The server name")
-    """The server username"""
-    avatar: Optional[ImageMetadataGQL] = gql.field(description="The server image")
-    """The server image"""
-
-    server_id: gql.Private[str]  # ObjectId
-    project_links: gql.Private[list[str]]  # ObjectId
-    owner_links: gql.Private[list[str]]  # ObjectId
-
+class ServerGQL(PartialServerGQL):
     @classmethod
     def from_db(cls: Type[ServerGQL], server: ShowtimesServer):
         return cls(

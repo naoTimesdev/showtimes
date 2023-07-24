@@ -70,7 +70,7 @@ class Query:
     )
 
     @gql.field(description="Get current user session, different from user query which query user information")
-    async def session(self, info: Info[SessionQLContext, None]):
+    async def session(self, info: Info[SessionQLContext, None]) -> Result | UserSessionGQL:
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
 
@@ -334,7 +334,7 @@ class Mutation:
         return Result(success=True, message=None, code=None)
 
     @gql.mutation(description="Reset API key of an account")
-    async def reset_api(self, info: Info[SessionQLContext, None]):
+    async def reset_api(self, info: Info[SessionQLContext, None]) -> Result:
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
 

@@ -28,7 +28,7 @@ from pydantic import BaseModel
 
 from showtimes.models.database import ShowtimesUser
 from showtimes.models.session import UserSession
-from showtimes.tooling import get_env_config
+from showtimes.tooling import get_env_config, get_logger
 
 from .backend import InMemoryBackend, RedisBackend, SessionBackend
 from .errors import BackendError, SessionError
@@ -42,6 +42,7 @@ __all__ = (
     "check_session",
     "is_master_session",
 )
+logger = get_logger("Showtimes.Session.Handler")
 
 
 class SameSiteEnum(str, Enum):
@@ -101,14 +102,18 @@ class SessionHandler:
 
     async def set_or_update_session(self, data: UserSession, response: Optional[Response] = None):
         try:
+            logger.debug(f"Updating session: {data}")
             await self.update_session(data, response)
         except BackendError:
+            logger.debug(f"Creating new session: {data}")
             await self.set_session(data, response)
 
     async def revoke_user_api(self, api_key: str):
+        logger.debug(f"Revoking API access: {api_key}")
         await self.backend.delete(f"|apimode|{api_key}")
 
     async def reset_api(self):
+        logger.debug("Revoking all API Access!")
         await self.backend.bulk_delete("|apimode|*")
 
     def set_cookie(self, response: Response, session_id: UUID):
@@ -152,32 +157,41 @@ class SessionHandler:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Token "):
             auth_header = auth_header[6:]
+            logger.debug(f"Detected login via API key: {auth_header}")
             master_key = get_env_config()["MASTER_KEY"]
             if auth_header == master_key:
+                logger.debug("API key is master key, returning master session")
                 return self._master_session
 
+            logger.debug(f"[{auth_header}] Checking if session is already active")
             session_auth = await self.backend.read(f"|apimode|{auth_header}")
             if session_auth:
                 return session_auth
+            logger.debug(f"[{auth_header}] Checking if user exist with this API key")
             user_with_key = await ShowtimesUser.find_one(ShowtimesUser.api_key == auth_header)
             if user_with_key is None:
                 raise SessionError(detail="Unknown API key", status_code=401)
+            logger.debug(f"[{auth_header}] Creating new session for user")
             user_session = UserSession.from_db(user_with_key)
             await self.set_session(user_session)
             return user_session
 
+        logger.debug("Checking if session is already active")
         signed_session = request.cookies.get(self.model.name)
         if not signed_session:
             raise SessionError(detail="No session found", status_code=403)
 
         try:
+            logger.debug(f"Checking session: {signed_session}")
             session = UUID(self.signer.loads(signed_session, max_age=self.params.max_age, return_timestamp=False))
         except (SignatureExpired, BadSignature) as exc:
             raise SessionError(detail="Session expired/invalid", status_code=401) from exc
 
+        logger.debug(f"Session is valid: {session}, checking backend")
         session_data = await self.backend.read(session)
         if not session_data:
             raise SessionError(detail="Session expired/invalid", status_code=401)
+        logger.debug(f"Session is valid: {session}, returning session data")
         return session_data
 
 

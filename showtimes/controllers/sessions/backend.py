@@ -128,33 +128,33 @@ class InMemoryBackend(SessionBackend):
     """Store session inside a memory dictionary."""
 
     def __init__(self) -> None:
-        self.__SESSIONS: dict[UUID | str, UserSession] = {}
+        self.__SESSIONS: dict[str, UserSession] = {}
 
     async def shutdown(self) -> None:
         pass
 
     async def read(self, session_id: UUID | str) -> Optional[UserSession]:
-        return self.__SESSIONS.get(session_id)
+        return self.__SESSIONS.get(str(session_id))
 
     async def create(self, session_id: UUID | str, data: UserSession) -> None:
-        if self.__SESSIONS.get(session_id) is not None:
+        if self.__SESSIONS.get(str(session_id)) is not None:
             raise BackendError("create can't overwrite an existing session")
-        self.__SESSIONS[session_id] = data
+        self.__SESSIONS[str(session_id)] = data
 
     async def update(self, session_id: UUID | str, data: UserSession) -> None:
-        if self.__SESSIONS.get(session_id) is None:
+        if self.__SESSIONS.get(str(session_id)) is None:
             raise BackendError("session does not exist, cannot update")
-        self.__SESSIONS[session_id] = data
+        self.__SESSIONS[str(session_id)] = data
 
     async def delete(self, session_id: UUID | str) -> None:
         try:
-            del self.__SESSIONS[session_id]
+            del self.__SESSIONS[str(session_id)]
         except KeyError:
             pass
 
     async def bulk_delete(self, prefix: str):
         for session_id in list(self.__SESSIONS.keys()):
-            if fnmatchcase(str(session_id), prefix):
+            if fnmatchcase(str(str(session_id)), prefix):
                 await self.delete(session_id)
 
 

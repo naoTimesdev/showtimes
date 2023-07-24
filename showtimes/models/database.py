@@ -423,6 +423,15 @@ class ShowtimesServer(Document):
         use_state_management = True
 
 
+class ShowtimesCollaborationInfo(BaseModel):
+    """
+    The collaboration info data for the document.
+    """
+
+    server: Link[ShowtimesServer]
+    project: Optional[Link[ShowProject]] = None
+
+
 class ShowtimesCollaboration(Document):
     """
     The collaboration document.
@@ -430,14 +439,17 @@ class ShowtimesCollaboration(Document):
 
     code: str
     """The code of the collaboration."""
-    source: Link[ShowtimesServer]
+    source: ShowtimesCollaborationInfo
     """The source server of the collaboration."""
-    target: Link[ShowtimesServer]
+    target: ShowtimesCollaborationInfo
     """The target server of the collaboration."""
-    project: Link[ShowProject]
-    """The project for the collaboration."""
 
     collab_id: UUID = Field(default_factory=make_uuid)
+
+    @before_event(*AllEvent)
+    def verify_source(self):
+        if self.source.project is None:
+            raise ValueError("Source project must be provided.")
 
     class Settings:
         name = "ShowtimesCollaborations"

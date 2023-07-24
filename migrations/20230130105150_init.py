@@ -756,16 +756,22 @@ class Forward:
                 if src_srv_info is None:
                     logger.warning(f"  Server {pending.server_id} not found, skipping...")
                     continue
-                proj_info = ADDED_SHOWTIMES_PROJECTS.get(pending.server_id, {}).get(pending.anime_id)
-                if proj_info is None:
+                src_proj_info = ADDED_SHOWTIMES_PROJECTS.get(pending.server_id, {}).get(pending.anime_id)
+                if src_proj_info is None:
                     logger.warning(f"  Project {pending.anime_id} not found, skipping...")
                     continue
+                target_proj_info = ADDED_SHOWTIMES_PROJECTS.get(target_srv_id, {}).get(pending.anime_id)
 
                 sscollab = newdb.ShowtimesCollaboration(
                     code=pending.id,
-                    source=to_link(src_srv_info),
-                    target=to_link(target_srv),
-                    project=to_link(proj_info),
+                    source=newdb.ShowtimesCollaborationInfo(
+                        server=to_link(src_srv_info),
+                        project=to_link(src_proj_info),
+                    ),
+                    target=newdb.ShowtimesCollaborationInfo(
+                        server=to_link(src_srv_info),
+                        project=to_link(target_proj_info) if target_proj_info is not None else None,
+                    ),
                 )
                 _sscollab = await newdb.ShowtimesCollaboration.insert_one(sscollab, session=session)
                 if _sscollab is None:
@@ -881,6 +887,7 @@ class Backward:
             except Exception as exc:
                 logger.exception(exc)
                 logger.warning(f"  Failed to delete poster {poster.key}")
+        await newdb.ShowProject.delete_all(session=session)
         logger.info("Deleting ShowExternalData...")
         await newdb.ShowExternalAnilist.delete_all(session=session)
         await newdb.ShowExternalTMDB.delete_all(session=session)

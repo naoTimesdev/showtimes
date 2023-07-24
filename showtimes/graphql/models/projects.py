@@ -16,12 +16,13 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import Type
+from typing import Type, cast
 
 import strawberry as gql
 from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
 
+from showtimes.extensions.graphql.scalars import DateTime
 from showtimes.graphql.models.collab import ProjectCollabLinkGQL
 from showtimes.models.database import ShowProject, ShowtimesCollaborationLinkSync
 
@@ -73,6 +74,8 @@ class ProjectGQL(PartialProjectInterface):
             integrations=[IntegrationGQL.from_db(integration) for integration in project.integrations],
             assignments=[ProjectAssigneeGQL.from_db(actor) for actor in project.assignments],
             statuses=statuses,
+            created_at=cast(DateTime, project.created_at),
+            updated_at=cast(DateTime, project.updated_at),
             project_id=str(project.id),
             ex_proj_id=str(project.external.ref.id),
         )

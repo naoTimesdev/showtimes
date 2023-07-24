@@ -16,12 +16,13 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import NewType, cast
+from datetime import datetime
+from typing import NewType, TypeAlias, Union
 from uuid import UUID as UUIDMod  # noqa: N811
 
+import pendulum
 import strawberry as gql
 from pendulum.datetime import DateTime as PendulumDT
-from pendulum.parser import parse as pendulum_parse
 
 __all__ = (
     "UUID",
@@ -48,6 +49,13 @@ Upload = gql.scalar(
     parse_value=lambda x: x,
 )
 
+
+def _serialize_datetime(dt: PendulumDT | datetime) -> str:
+    if isinstance(dt, datetime):
+        return pendulum.instance(dt).to_iso8601_string()
+    return dt.to_iso8601_string()
+
+
 UNIXTimestamp = gql.scalar(
     int,
     name="UNIX",
@@ -55,10 +63,10 @@ UNIXTimestamp = gql.scalar(
     serialize=lambda x: int(x),
     parse_value=lambda x: int(x),
 )
-DateTime = gql.scalar(
-    NewType("DateTime", PendulumDT),
+DateTime: TypeAlias = gql.scalar(
+    Union[PendulumDT, datetime],
     name="DateTime",
     description="A datetime string, formatted in ISO 8601",
-    serialize=lambda x: cast(PendulumDT, x).to_iso8601_string(),
-    parse_value=lambda x: pendulum_parse(x),
-)
+    serialize=_serialize_datetime,
+    parse_value=lambda x: pendulum.parser.parse(x),
+)  # type: ignore

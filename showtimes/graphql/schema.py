@@ -34,6 +34,7 @@ from showtimes.graphql.models.projects import ProjectGQL
 from showtimes.graphql.models.servers import ServerGQL
 from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, UserType
 from showtimes.models.session import ServerSessionInfo
+from showtimes.utils import make_uuid
 
 from .models import ErrorCode, Result, UserGQL, UserTemporaryGQL
 from .mutations.users import (
@@ -329,6 +330,29 @@ class Mutation:
         info.context.session_latch = True
         info.context.user.active = ServerSessionInfo(server_id=str(srv_info.server_id), name=srv_info.name)
         return Result(success=True, message=None, code=None)
+
+    @gql.mutation(description="Reset API key of an account")
+    async def reset_api(self, info: Info[SessionQLContext, None]):
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        session = info.context.user
+        user = await ShowtimesUser.find_one(ShowtimesUser.id == ObjectId(info.context.user.object_id))
+        if user is None:
+            info.context.session_latch = True
+            info.context.user = None
+            return Result(success=False, message="User not found", code=ErrorCode.UserNotFound)
+
+        if session.api_key is not None:
+            # We're using an API key auth, we need to revoke this one
+            info.context.session_latch = True
+            info.context.user = None
+
+        # Generate new API key
+        api_new_key = str(make_uuid())
+        user.api_key = api_new_key
+        await user.save()  # type: ignore
+        return Result(success=True, message=api_new_key, code=None)
 
 
 @gql.type

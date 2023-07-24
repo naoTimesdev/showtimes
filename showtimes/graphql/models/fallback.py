@@ -58,6 +58,7 @@ class ErrorCode:
     ServerNotFound = "SERVER_NOT_FOUND"
     ServerNotAllowed = "SERVER_NOT_ALLOWED"
     ServerError = "SERVER_ERROR"
+    ProjectNotFound = "PROJECT_NOT_FOUND"
 
 
 UserResult = gql.union(

@@ -47,7 +47,19 @@ class ProjectGQL(PartialProjectGQL):
         return ProjectCollabLinkGQL.from_db(self.server_id, self.id, collab_sync)
 
     @classmethod
-    def from_db(cls: Type[ProjectGQL], project: ShowProject):
+    def from_db(cls: Type[ProjectGQL], project: ShowProject, *, only_latest: bool = False):
+        statuses: list[ProjectStatusGQL] = [ProjectStatusGQL.from_db(status) for status in project.statuses]
+        if only_latest:
+            _found_latest: ProjectStatusGQL | None = None
+            for status in statuses:
+                if status.is_released:
+                    continue
+                _found_latest = status
+                break
+            if _found_latest is None:
+                statuses = []
+            else:
+                statuses = [_found_latest]
         return cls(
             id=project.show_id,
             title=project.title,
@@ -60,7 +72,7 @@ class ProjectGQL(PartialProjectGQL):
             server_id=project.server_id,
             integrations=[IntegrationGQL.from_db(integration) for integration in project.integrations],
             assignments=[ProjectAssigneeGQL.from_db(actor) for actor in project.assignments],
-            statuses=[ProjectStatusGQL.from_db(status) for status in project.statuses],
+            statuses=statuses,
             project_id=str(project.id),
             ex_proj_id=str(project.external.ref.id),
         )

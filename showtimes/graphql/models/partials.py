@@ -252,7 +252,19 @@ class PartialProjectGQL:
             raise ValueError("Unknown project external type")
 
     @classmethod
-    def from_db(cls: Type[PartialProjectGQL], project: ShowProject):
+    def from_db(cls: Type[PartialProjectGQL], project: ShowProject, *, only_latest: bool = False):
+        statuses: list[ProjectStatusGQL] = [ProjectStatusGQL.from_db(status) for status in project.statuses]
+        if only_latest:
+            _found_latest: ProjectStatusGQL | None = None
+            for status in statuses:
+                if status.is_released:
+                    continue
+                _found_latest = status
+                break
+            if _found_latest is None:
+                statuses = []
+            else:
+                statuses = [_found_latest]
         return cls(
             id=project.show_id,
             title=project.title,
@@ -265,7 +277,7 @@ class PartialProjectGQL:
             server_id=project.server_id,
             integrations=[IntegrationGQL.from_db(integration) for integration in project.integrations],
             assignments=[ProjectAssigneeGQL.from_db(actor) for actor in project.assignments],
-            statuses=[ProjectStatusGQL.from_db(status) for status in project.statuses],
+            statuses=statuses,
             project_id=str(project.id),
             ex_proj_id=str(project.external.ref.id),
         )

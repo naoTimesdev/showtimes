@@ -75,4 +75,8 @@ class SearchSourceTypeGQL(Enum):
 @gql.enum(name="IntegrationInputAction", description="The action to be taken for the integration")
 class IntegrationInputActionGQL(Enum):
     ADD = "add"
+    """Add the integration even if similar stuff exists"""
     DELETE = "delete"
+    """Delete the integration if it exists"""
+    UPSERT = "modify"
+    """Modify the integration if it exists, otherwise add it"""

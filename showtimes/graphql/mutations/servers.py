@@ -83,6 +83,7 @@ async def mutate_server_update(
     if isinstance(input_data.integrations, list):
         add_integrations: list[IntegrationInputGQL] = []
         remove_integrations: list[IntegrationInputGQL] = []
+        modify_integrations: list[IntegrationInputGQL] = []
         for idx, integration in enumerate(input_data.integrations):
             if not isinstance(integration, IntegrationInputGQL):
                 raise TypeError(f"Integration[{idx}] must be an IntegrationInputGQL")
@@ -108,6 +109,17 @@ async def mutate_server_update(
 
         for integration in add_integrations:
             server_info.integrations.append(IntegrationId(id=integration.id, type=integration.type))
+
+        for integration in modify_integrations:
+            found_any = False
+            for idx, server_integration in enumerate(server_info.integrations):
+                if server_integration.type == integration.type and server_integration.id != integration.id:
+                    server_info.integrations[idx].id = integration.id
+                    found_any = True
+                    break
+            if not found_any:
+                server_info.integrations.append(IntegrationId(id=integration.id, type=integration.type))
+            save_changes = True
 
     if save_changes:
         logger.info(f"Saving changes for server {id}")
@@ -159,7 +171,7 @@ async def mutate_server_add(
             if not isinstance(integration, IntegrationInputGQL):
                 raise TypeError(f"Integration[{idx}] must be an IntegrationInputGQL")
 
-            if integration.action == IntegrationInputActionGQL.ADD:
+            if integration.action != IntegrationInputActionGQL.DELETE:
                 add_integrations.append(integration)
 
         for integration in add_integrations:

@@ -35,6 +35,7 @@ __all__ = (
     "init_searcher",
 )
 StructT = TypeVar("StructT", bound=Struct)
+SchemaT = TypeVar("SchemaT", bound=SchemaAble)
 
 
 class TypedSearchResults(Struct, Generic[StructT]):
@@ -74,7 +75,7 @@ class TypedSearchResults(Struct, Generic[StructT]):
         )
 
 
-class ShowtimesSearcher(Generic[StructT]):
+class ShowtimesSearcher(Generic[SchemaT]):
     def __init__(self, meili_url: str, api_key: str) -> None:
         self._client = Client(meili_url, api_key)
         self._logger = get_logger("Showtimes.Controller.Searcher")
@@ -90,23 +91,27 @@ class ShowtimesSearcher(Generic[StructT]):
     async def close(self):
         await self._client.aclose()
 
-    async def add_document(self, document: SchemaAble):
+    async def add_document(self, document: SchemaT):
         if not issubclass(type(document), SchemaAble):
             raise TypeError("document must be a SchemaAble object.")
+        if not hasattr(document, "id"):
+            raise TypeError("document must have an id attribute.")
 
         index = self._client.index(document.Config.index)
-        await index.add_documents([document.to_dict()])
+        await index.add_documents([document.to_dict()], primary_key="id")
 
     async def add_documents(self, documents: list[SchemaAble]):
         if not all(issubclass(type(document), SchemaAble) for document in documents):
             raise TypeError("all documents must be a SchemaAble object.")
+        if not all(hasattr(document, "id") for document in documents):
+            raise TypeError("all documents must have an id attribute.")
 
         group_by_index: dict[str, list[SchemaAble]] = {}
         for document in documents:
             group_by_index.setdefault(document.Config.index, []).append(document)
         for index_name, documents in group_by_index.items():
             index = self._client.index(index_name)
-            await index.add_documents([document.to_dict() for document in documents])
+            await index.add_documents([document.to_dict() for document in documents], primary_key="id")
 
     @overload
     async def search(self, index_name: str, query: str, **kwargs) -> SearchResults:
@@ -137,20 +142,27 @@ class ShowtimesSearcher(Generic[StructT]):
     async def update_document(self, document: SchemaAble):
         if not issubclass(type(document), SchemaAble):
             raise TypeError("document must be a SchemaAble object.")
+        if not hasattr(document, "id"):
+            raise TypeError("document must have an id attribute.")
 
         index = self._client.index(document.Config.index)
-        await index.update_documents([document.to_dict()])
+        await index.update_documents([document.to_dict()], primary_key="id")
 
     async def update_documents(self, documents: list[SchemaAble]):
         if not all(issubclass(type(document), SchemaAble) for document in documents):
             raise TypeError("all documents must be a SchemaAble object.")
+        if not all(hasattr(document, "id") for document in documents):
+            raise TypeError("all documents must have an id attribute.")
 
         group_by_index: dict[str, list[SchemaAble]] = {}
         for document in documents:
             group_by_index.setdefault(document.Config.index, []).append(document)
         for index_name, documents in group_by_index.items():
             index = self._client.index(index_name)
-            await index.update_documents([document.to_dict() for document in documents])
+            await index.update_documents([document.to_dict() for document in documents], primary_key="id")
+
+    async def delete_index(self, index_name: str):
+        await self._client.delete_index_if_exists(index_name)
 
 
 _SHOWTIMES_SEARCHER: ShowtimesSearcher | None = None

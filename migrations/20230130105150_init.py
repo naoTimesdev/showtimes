@@ -28,9 +28,11 @@ from beanie import Document, Link, free_fall_migration
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
+from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.security import encrypt_password
 from showtimes.controllers.storages import get_s3_storage, get_storage, init_s3_storage
 from showtimes.models import database as newdb
+from showtimes.models.searchdb import ProjectSearch, SearchIntegrationData, ServerSearch, UserSearch
 from showtimes.tooling import get_env_config, setup_logger
 from showtimes.utils import make_uuid, try_int
 
@@ -650,6 +652,16 @@ class Forward:
             await init_s3_storage(S3_BUCKET, S3_KEY, S3_SECRET, S3_REGION, endpoint=S3_ENDPOINT)
             logger.info("S3 storage initialized!")
 
+        logger.info("Creating Meilisearch client instances...")
+        MEILI_URL = env_config.get("MEILI_URL")
+        MEILI_API_KEY = env_config.get("MEILI_API_KEY")
+        if MEILI_URL is None or MEILI_API_KEY is None:
+            raise RuntimeError("No Meilisearch URL or API key specified")
+
+        await init_searcher(MEILI_URL, MEILI_API_KEY)
+        logger.info("Meilisearch client instances created!")
+        meili_client = get_searcher()
+
         logger.info("Fetching ShowtimesUISchema...")
         all_ui_info = await ShowtimesUISchema.find_all(session=session).to_list()
         logger.info("Fetching ShowAdminSchema...")
@@ -684,6 +696,9 @@ class Forward:
                 password=password,
                 name=ui_info.name,
                 discord_meta=discord_meta,
+                integrations=[
+                    newdb.IntegrationId(id=str(ui_info.user_id), type=newdb.DefaultIntegrationType.DiscordUser)
+                ],
             )
             _added_user = await newdb.ShowtimesUser.insert_one(ssuser, session=session)
             if _added_user is None:
@@ -696,6 +711,9 @@ class Forward:
                 username=missing_ui.admin_id,
                 password="unset_" + await encrypt_password(str(make_uuid())),
                 type=newdb.ShowtimesTempUserType.MIGRATION,
+                integrations=[
+                    newdb.IntegrationId(id=str(ui_info.user_id), type=newdb.DefaultIntegrationType.DiscordUser)
+                ],
             )
             _added_user = await newdb.ShowtimesTemporaryUser.insert_one(ssuser, session=session)
             if _added_user is None:
@@ -831,6 +849,65 @@ class Forward:
                 if _cres is None:
                     raise RuntimeError("Failed to add collaboration link")
 
+        logger.info("Creating Meilisearch index...")
+        search_srv_docs: list[ServerSearch] = []
+        for server in ADDED_SHOWTIMES_SERVERS.values():
+            project_ids = [str(project.ref.id) for project in server.projects]
+            integrations = [
+                SearchIntegrationData(integration.id, integration.type) for integration in server.integrations
+            ]
+            server_search = ServerSearch(
+                id=str(server.server_id), name=server.name, projects=project_ids, integrations=integrations
+            )
+            search_srv_docs.append(server_search)
+        logger.info(f"  Adding {len(search_srv_docs)} documents to Server Index...")
+        await meili_client.add_documents(search_srv_docs)  # type: ignore
+        search_proj_docs: list[ProjectSearch] = []
+        for projects in ADDED_SHOWTIMES_PROJECTS.values():
+            for project in projects.values():
+                integrations = [
+                    SearchIntegrationData(integration.id, integration.type) for integration in project.integrations
+                ]
+                project_search = ProjectSearch(
+                    id=str(project.show_id),
+                    title=project.title,
+                    poster_url=project.poster.image.as_url(),
+                    created_at=int(project.created_at.timestamp()),
+                    updated_at=int(project.updated_at.timestamp()),
+                    server_id=str(project.server_id),
+                    integrations=integrations,
+                )
+                search_proj_docs.append(project_search)
+        logger.info(f"  Adding {len(search_proj_docs)} documents to Project Index...")
+        await meili_client.add_documents(search_proj_docs)  # type: ignore
+        search_user_docs: list[UserSearch] = []
+        for user in ADDED_SHOWTIMES_USERS.values():
+            integrations = [
+                SearchIntegrationData(integration.id, integration.type) for integration in user.integrations
+            ]
+            utype = "tempuser"
+            avatar_url = None
+            if isinstance(user, newdb.ShowtimesUser):
+                utype = "user"
+                if user.avatar is not None:
+                    avatar_url = user.avatar.as_url()
+            user_search = UserSearch(
+                id=str(user.user_id),
+                name=getattr(user, "name", None),
+                username=user.username,
+                object_id=str(user.id),
+                type=utype,
+                integrations=integrations,
+                avatar_url=avatar_url,
+            )
+            search_user_docs.append(user_search)
+        logger.info(f"  Adding {len(search_user_docs)} documents to User Index...")
+        await meili_client.add_documents(search_user_docs)  # type: ignore
+
+        logger.info("Closing Meilisearch client instances...")
+        await meili_client.close()
+        logger.info("Closed Meilisearch client instances!")
+
         try:
             s3_bucket = get_s3_storage()
             logger.info("Closing S3 storage...")
@@ -870,6 +947,16 @@ class Backward:
             await init_s3_storage(S3_BUCKET, S3_KEY, S3_SECRET, S3_REGION, endpoint=S3_ENDPOINT)
             logger.info("S3 storage initialized!")
 
+        logger.info("Creating Meilisearch client instances...")
+        MEILI_URL = env_config.get("MEILI_URL")
+        MEILI_API_KEY = env_config.get("MEILI_API_KEY")
+        if MEILI_URL is None or MEILI_API_KEY is None:
+            raise RuntimeError("No Meilisearch URL or API key specified")
+
+        await init_searcher(MEILI_URL, MEILI_API_KEY)
+        logger.info("Meilisearch client instances created!")
+        meili_client = get_searcher()
+
         logger.info("Deleting ShowtimesUser...")
         await newdb.ShowtimesUser.delete_all(session=session)
         logger.info("Deleting ShowtimesTemporaryUser...")
@@ -899,6 +986,10 @@ class Backward:
         logger.info("Deleting ShowtimesCollaborationLinkSync...")
         await newdb.ShowtimesCollaborationLinkSync.delete_all(session=session)
         logger.info("Rolled back everything!")
+
+        await meili_client.delete_index(ProjectSearch.Config.index)
+        await meili_client.delete_index(ServerSearch.Config.index)
+        await meili_client.delete_index(UserSearch.Config.index)
 
         try:
             s3_bucket = get_s3_storage()

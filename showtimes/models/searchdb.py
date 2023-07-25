@@ -16,7 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from dataclasses import Field, dataclass
+from dataclasses import Field, dataclass, field
 from inspect import isclass
 from typing import Any, ClassVar, Protocol, Type, TypeVar
 
@@ -115,10 +115,17 @@ class SchemaAble:
 
 
 @dataclass
+class SearchIntegrationData:
+    id: str
+    type: str
+
+
+@dataclass
 class ServerSearch(SchemaAble):
     id: str
     name: str
-    projects: list[str]
+    projects: list[str]  # MongoDB ObjectID
+    integrations: list[SearchIntegrationData] = field(default_factory=list)
 
     class Config:
         index = "servers"
@@ -126,29 +133,27 @@ class ServerSearch(SchemaAble):
 
 @dataclass
 class ProjectSearch(SchemaAble):
-    id: str
+    id: str  # show_id
     title: str
-    poster_url: str
+    poster_url: str | None
     created_at: int
     updated_at: int
     server_id: str
+    integrations: list[SearchIntegrationData] = field(default_factory=list)
 
     class Config:
         index = "projects"
 
 
 @dataclass
-class UserImageMetadata:
-    key: str
-    format: str
-
-
-@dataclass
 class UserSearch(SchemaAble):
     id: str
     username: str
+    object_id: str  # MongoDB ObjectID
+    type: str  # temp/registered
+    integrations: list[SearchIntegrationData] = field(default_factory=list)
     name: str | None = None
-    avatar_url: UserImageMetadata | None = None
+    avatar_url: str | None = None
 
     class Config:
         index = "users"

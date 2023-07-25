@@ -27,7 +27,7 @@ from showtimes.models.database import ShowProject, ShowtimesCollaborationLinkSyn
 
 from .collab import ProjectCollabLinkGQL
 from .common import ImageMetadataGQL, IntegrationGQL, IntegrationInputGQL, KeyValueInputGQL
-from .enums import SearchExternalTypeGQL, SearchSourceTypeGQL
+from .enums import ProjectInputAssigneeActionGQL, SearchExternalTypeGQL, SearchSourceTypeGQL
 from .partials import PartialProjectInterface, ProjectAssigneeGQL, ProjectStatusGQL, ShowPosterGQL
 
 __all__ = (
@@ -109,6 +109,9 @@ class ProjectInputAssigneeGQL:
     key: str = gql.field(description="The key of the assignee")
     info: ProjectInputAssigneeInfoGQL | None = gql.field(
         default=gql.UNSET, description="The information of the assignee"
+    )
+    mode: ProjectInputAssigneeActionGQL = gql.field(
+        default=ProjectInputAssigneeActionGQL.UPSERT, description="The action to perform on the assignee"
     )
 
 

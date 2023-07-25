@@ -42,7 +42,12 @@ from showtimes.models.session import ServerSessionInfo
 from showtimes.utils import make_uuid
 
 from .models import ErrorCode, Result, UserGQL, UserSessionGQL, UserTemporaryGQL
-from .mutations.projects import mutate_project_add, mutate_project_delete, mutate_project_update_episode
+from .mutations.projects import (
+    mutate_project_add,
+    mutate_project_delete,
+    mutate_project_update,
+    mutate_project_update_episode,
+)
 from .mutations.servers import mutate_server_add, mutate_server_update
 from .mutations.users import (
     mutate_login_user,
@@ -461,7 +466,9 @@ class Mutation:
         return response
 
     @gql.mutation(description="Update a project")
-    async def update_project(self, info: Info[SessionQLContext, None], id: UUID) -> Result:
+    async def update_project(
+        self, info: Info[SessionQLContext, None], id: UUID, data: ProjectInputGQL
+    ) -> Result | ProjectGQL:
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
 
@@ -469,7 +476,10 @@ class Mutation:
         if info.context.user.privilege != UserType.ADMIN:
             owner_id = info.context.user.object_id
         # response = await mutate_project_delete(id, owner_id)
-        return Result(success=False, message="Not implemented", code=ErrorCode.NotImplemented)
+        response: Result | ShowProject = await mutate_project_update(id, data, owner_id)
+        if isinstance(response, Result):
+            return response
+        return ProjectGQL.from_db(response)
 
     @gql.mutation(description="Update a project episode status")
     async def update_project_episode(

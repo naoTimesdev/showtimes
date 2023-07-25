@@ -30,6 +30,7 @@ __all__ = (
     "SearchTitleTypeGQL",
     "SearchSourceTypeGQL",
     "IntegrationInputActionGQL",
+    "ProjectInputAssigneeActionGQL",
 )
 
 UserTypeGQL = gql.enum(
@@ -80,3 +81,11 @@ class IntegrationInputActionGQL(Enum):
     """Delete the integration if it exists"""
     UPSERT = "modify"
     """Modify the integration if it exists, otherwise add it"""
+
+
+@gql.enum(name="ProjectInputAssigneeAction", description="The action to be taken for the assignments")
+class ProjectInputAssigneeActionGQL(Enum):
+    DELETE = "delete"
+    """Delete the assignee if it exists, will also delete the assignee's status"""
+    UPSERT = "modify"
+    """Modify the assignee if it exists, otherwise add it (default)"""

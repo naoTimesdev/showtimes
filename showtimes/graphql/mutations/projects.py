@@ -39,10 +39,11 @@ from showtimes.controllers.anilist import (
 from showtimes.controllers.gqlapi import GraphQLResult
 from showtimes.controllers.searcher import get_searcher
 from showtimes.controllers.storages import get_storage
-from showtimes.extensions.graphql.files import handle_image_upload
+from showtimes.extensions.graphql.files import delete_image_upload, handle_image_upload
 from showtimes.graphql.models.common import IntegrationInputGQL
 from showtimes.graphql.models.enums import (
     IntegrationInputActionGQL,
+    ProjectInputAssigneeActionGQL,
     SearchExternalTypeGQL,
     SearchSourceTypeGQL,
 )
@@ -86,6 +87,7 @@ from showtimes.utils import complex_walk, make_uuid
 
 __all__ = (
     "mutate_project_add",
+    "mutate_project_update",
     "mutate_project_delete",
     "mutate_project_update_episode",
 )
@@ -651,6 +653,171 @@ async def mutate_project_add(
     await server_info.save()  # type: ignore
     await update_server_searchdb(server_info)
     return _project
+
+
+async def mutate_project_update(
+    project_id: UUID,
+    input_data: ProjectInputGQL,
+    owner_id: str | None = None,  # None assumes admin
+) -> Result | ShowProject:
+    logger.info(f"Modifying project {project_id}")
+
+    find_results = await _find_project(project_id, owner_id)
+    if isinstance(find_results, Result):
+        return find_results
+    project_info, server_info = find_results
+
+    save_changes = False
+
+    if isinstance(input_data.integrations, list):
+        add_integrations: list[IntegrationInputGQL] = []
+        remove_integrations: list[IntegrationInputGQL] = []
+        modify_integrations: list[IntegrationInputGQL] = []
+        for idx, integration in enumerate(input_data.integrations):
+            if not isinstance(integration, IntegrationInputGQL):
+                raise TypeError(f"Integration[{idx}] must be an IntegrationInputGQL")
+
+            if integration.action == IntegrationInputActionGQL.ADD:
+                add_integrations.append(integration)
+            elif integration.action == IntegrationInputActionGQL.DELETE:
+                remove_integrations.append(integration)
+
+        if add_integrations:
+            save_changes = True
+
+        for integration in remove_integrations:
+            _found_idx: int | None = None
+            for int_integ in project_info.integrations:
+                if int_integ.id == integration.id and int_integ.type == integration.type:
+                    _found_idx = project_info.integrations.index(int_integ)
+                    break
+
+            if _found_idx is not None:
+                save_changes = True
+                project_info.integrations.pop(_found_idx)
+
+        for integration in add_integrations:
+            project_info.integrations.append(IntegrationId(id=integration.id, type=integration.type))
+
+        for integration in modify_integrations:
+            found_any = False
+            for idx, proj_integration in enumerate(project_info.integrations):
+                if proj_integration.type == integration.type and proj_integration.id != integration.id:
+                    project_info.integrations[idx].id = integration.id
+                    found_any = True
+                    break
+            if not found_any:
+                project_info.integrations.append(IntegrationId(id=integration.id, type=integration.type))
+            save_changes = True
+
+    delete_show_actor: list[ShowActor] = []
+    if isinstance(input_data.assignees, list):
+        preexisting_assigness: dict[str, RoleActor] = {}
+        for assignee in project_info.assignments:
+            if assignee.actor is not None:
+                fetched = await assignee.actor.fetch()
+                if isinstance(fetched, RoleActor):
+                    preexisting_assigness[str(fetched.actor_id)] = fetched
+                else:
+                    logger.warning(f"Unable to fetch actor {assignee.actor.ref.id}, deleting info")
+                    assignee.actor = None
+                    save_changes = True
+
+        for assignee_new in input_data.assignees:
+            if not isinstance(assignee_new, ProjectInputAssigneeGQL):
+                continue
+            for old_assignee in project_info.assignments:
+                if old_assignee.key == assignee_new.key.upper():
+                    if assignee_new.mode == ProjectInputAssigneeActionGQL.DELETE:
+                        delete_show_actor.append(old_assignee)
+                    elif assignee_new.mode == ProjectInputAssigneeActionGQL.UPSERT:
+                        # If info is None, then remove it
+                        if assignee_new.info is None and old_assignee.actor is not None:
+                            old_assignee.actor = None
+                            save_changes = True
+                        elif assignee_new.info is not None and old_assignee.actor is None:
+                            integrations = _process_input_integration(assignee_new.info.integrations)
+                            preext = preexisting_assigness.get(assignee_new.info.id)
+                            if preext is not None:
+                                # Update integrations
+                                for integration in integrations:
+                                    # Injected
+                                    inject = False
+                                    for idx, _integration in enumerate(preext.integrations):
+                                        if _integration.id == integration.id:
+                                            preext.integrations[idx] = integration
+                                            inject = True
+                                            break
+                                    if not inject:
+                                        preext.integrations.append(integration)
+                                await preext.save()  # type: ignore
+                                old_assignee.actor = to_link(preext)
+                                save_changes = True
+                                preexisting_assigness[str(preext.actor_id)] = preext
+                            else:
+                                ainfo = RoleActor(
+                                    name=assignee_new.info.name,
+                                    integrations=integrations,
+                                )
+                                await ainfo.save()  # type: ignore
+                                preexisting_assigness[str(assignee_new.info.id)] = ainfo
+                                save_changes = True
+
+    if delete_show_actor:
+        logger.info(f"Deleting {len(delete_show_actor)} actors")
+        for actor in delete_show_actor:
+            for status in project_info.statuses:
+                delete_idx: int | None = None
+                for idx, role in enumerate(status.statuses):
+                    if role.key == actor.key.upper():
+                        delete_idx = idx
+                        break
+                if delete_idx is not None:
+                    status.statuses.pop(delete_idx)
+                    save_changes = True
+            delete_idx_a: int | None = None
+            for idx, assignee in enumerate(project_info.assignments):
+                if assignee.key == actor.key.upper():
+                    delete_idx_a = idx
+                    break
+            if delete_idx_a is not None:
+                project_info.assignments.pop(delete_idx_a)
+                save_changes = True
+
+    poster_meta: ImageMetadata | None = None
+    if input_data.poster is not None and input_data.poster is not gql.UNSET:
+        logger.debug(f"[{project_info.server_id}][{project_id}] Uploading poster...")
+        upload_result = await handle_image_upload(
+            input_data.poster,
+            str(server_info.server_id),
+            parent_id=str(project_id),
+            filename="poster",
+            type="project",
+        )
+
+        poster_ext = Path(upload_result.filename).suffix
+        poster_meta = ImageMetadata(
+            key=str(project_info.server_id),
+            parent=str(project_id),
+            filename=upload_result.filename,
+            type="project",
+            format=poster_ext,
+        )
+
+    if poster_meta is not None:
+        logger.info(f"Updating project {project_id} poster")
+        if project_info.poster.image.type != "invalids":
+            logger.debug(f"Deleting old poster for project {project_id}")
+            await delete_image_upload(project_info.poster.image)
+        project_info.poster.image = poster_meta
+        save_changes = True
+
+    if save_changes:
+        logger.info(f"Updating project {project_id}")
+        await project_info.save()  # type: ignore
+        logger.info(f"Project {project_id} updated, updating searchdb")
+        await update_searchdb(project_info)
+    return project_info
 
 
 def _create_updated_statuses(

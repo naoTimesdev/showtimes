@@ -118,7 +118,11 @@ class Query:
                 code=ErrorCode.ServerUnselect,
             )
 
-        success, srv_info, err_code = await resolve_server_fetch(srv_id)
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+
+        success, srv_info, err_code = await resolve_server_fetch(srv_id, owner_id)
         if not success and isinstance(srv_info, str):
             return Result(success=False, message=srv_info, code=err_code)
 
@@ -137,7 +141,11 @@ class Query:
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
 
-        return await resolve_servers_fetch_paginated(ids, limit, cursor, sort)
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+
+        return await resolve_servers_fetch_paginated(ids, limit, cursor, sort, owner_id)
 
     @gql.field(description="Get server project info")
     async def project(
@@ -320,15 +328,14 @@ class Mutation:
             info.context.session_latch = True
             return Result(success=True, message=None, code=None)
 
-        success, srv_info, err_code = await resolve_server_fetch(str(id))
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+
+        success, srv_info, err_code = await resolve_server_fetch(str(id), owner_id=owner_id)
         if not success and isinstance(srv_info, str):
             return Result(success=False, message=srv_info, code=err_code)
         srv_info = cast(ShowtimesServer, srv_info)
-        owner_ref_ids = [str(i.ref.id) for i in srv_info.owners]
-        if info.context.user.privilege != UserType.ADMIN and info.context.user.object_id not in owner_ref_ids:
-            return Result(
-                success=False, message="You are not one of the owner of this server", code=ErrorCode.ServerNotAllowed
-            )
         info.context.session_latch = True
         info.context.user.active = ServerSessionInfo(server_id=str(srv_info.server_id), name=srv_info.name)
         return Result(success=True, message=None, code=None)

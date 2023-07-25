@@ -22,6 +22,7 @@ from uuid import UUID
 import strawberry as gql
 from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
+from bson import DBRef, ObjectId
 
 from showtimes.graphql.cursor import Cursor, parse_cursor, to_cursor
 from showtimes.graphql.models.fallback import ErrorCode
@@ -41,10 +42,14 @@ ResultT = TypeVar("ResultT")
 ResultOrT: TypeAlias = tuple[Literal[False], str, str] | tuple[Literal[True], ResultT, None]
 
 
-async def resolve_server_fetch(srv_id: str) -> ResultOrT[ShowtimesServer]:
+async def resolve_server_fetch(srv_id: str, owner_id: str | None = None) -> ResultOrT[ShowtimesServer]:
     srv_info = await ShowtimesServer.find_one(ShowtimesServer.server_id == UUID(srv_id))
     if not srv_info:
         return False, "Server not found", ErrorCode.ServerNotFound
+
+    object_owners: list[ObjectId] = [owner.ref.id for owner in srv_info.owners]
+    if owner_id is not None and ObjectId(owner_id) not in object_owners:
+        return False, "You are not one of the owner of this server", ErrorCode.ServerNotAllowed
 
     return True, srv_info, None
 
@@ -54,16 +59,19 @@ async def resolve_servers_fetch_paginated(
     limit: int = 20,
     cursor: Cursor | None = gql.UNSET,
     sort: SortDirection = SortDirection.ASC,
+    owner_id: str | None = gql.UNSET,
 ) -> Connection[ServerGQL]:
     act_limit = limit + 1
     direction = "-" if sort is SortDirection.DESCENDING else "+"
 
     cursor_id = parse_cursor(cursor)
     find_args = []
-    added_query_ids = False
+    if owner_id is not None:
+        find_args.append(
+            OpIn(ShowtimesServer.owners, [DBRef(ShowtimesServer.get_motor_collection(), ObjectId(owner_id))])
+        )
     if isinstance(ids, list):
         find_args.append(OpIn(ShowtimesServer.server_id, ids))
-        added_query_ids = True
     if cursor_id is not None:
         find_args.append(ShowtimesServer.id >= cursor_id)
 
@@ -82,10 +90,13 @@ async def resolve_servers_fetch_paginated(
             nodes=[],
         )
 
-    if added_query_ids:
-        items_count = await ShowtimesServer.find(find_args[0]).count()
-    else:
-        items_count = await ShowtimesServer.find().count()
+    query_count = []
+    if owner_id is not None:
+        query_count.append(find_args[0])
+    if isinstance(ids, list):
+        query_count.append(OpIn(ShowtimesServer.server_id, ids))
+
+    items_count = await ShowtimesServer.find(*query_count).count()
 
     last_item = None
     if len(items) > limit:

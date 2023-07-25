@@ -512,6 +512,7 @@ async def _process_showtimes_project(
         integrations=integrations,
         created_at=last_update,
         updated_at=last_update,
+        aliases=showanime.aliases,
     )
 
     logger.info(f"   Adding {showanime.title}...")

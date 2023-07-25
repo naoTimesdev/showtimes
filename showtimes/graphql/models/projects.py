@@ -78,6 +78,7 @@ class ProjectGQL(PartialProjectInterface):
             if project.poster is not None
             else None,
             server_id=project.server_id,
+            aliases=project.aliases,
             integrations=[IntegrationGQL.from_db(integration) for integration in project.integrations],
             assignments=[ProjectAssigneeGQL.from_db(actor) for actor in project.assignments],
             statuses=statuses,
@@ -137,6 +138,7 @@ class ProjectInputGQL:
             "List of assignees to add to the project, if missing will use the default roles assignments per type"
         ),
     )
+    aliases: list[str] | None = gql.field(default=gql.UNSET, description="List of aliases to add to the project")
     roles: list[ProjectInputRolesGQL] | None = gql.field(
         default=gql.UNSET, description="List of roles to add to the project, if missing will use the default roles"
     )

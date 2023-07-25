@@ -291,6 +291,8 @@ class ShowProject(Document):
     Can be used to link to other services like Discord, role checking,
     announcement channels, etc.
     """
+    aliases: list[str] = Field(default_factory=list)
+    """A list of aliases for this project."""
     created_at: DateTime = Field(default_factory=pendulum_utc)
     """The time this project was created."""
     updated_at: DateTime = Field(default_factory=pendulum_utc)

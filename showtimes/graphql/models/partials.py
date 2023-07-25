@@ -236,6 +236,8 @@ class PartialProjectInterface:
     """The associated server ID"""
     integrations: list[IntegrationGQL] = gql.field(description="The project integrations")
     """The project integrations"""
+    aliases: list[str] = gql.field(description="The project aliases")
+    """The project aliases"""
     assignments: list[ProjectAssigneeGQL] = gql.field(description="The project assignments")
     """The project assignments"""
     statuses: list[ProjectStatusGQL] = gql.field(description="The project statuses of each episode")
@@ -290,6 +292,7 @@ class PartialProjectGQL(PartialProjectInterface):
             if project.poster is not None
             else None,
             server_id=project.server_id,
+            aliases=project.aliases,
             integrations=[IntegrationGQL.from_db(integration) for integration in project.integrations],
             assignments=[ProjectAssigneeGQL.from_db(actor) for actor in project.assignments],
             statuses=statuses,

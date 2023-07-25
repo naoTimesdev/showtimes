@@ -153,6 +153,7 @@ class ProjectSearch(SchemaAble):
     updated_at: int
     server_id: str
     integrations: list[SearchIntegrationData] = field(default_factory=list)
+    aliases: list[str] = field(default_factory=list)
 
     class Config:
         index = "projects"
@@ -167,6 +168,7 @@ class ProjectSearch(SchemaAble):
             created_at=int(project.created_at.timestamp()),
             updated_at=int(project.updated_at.timestamp()),
             server_id=str(project.server_id),
+            aliases=project.aliases,
             integrations=integrations,
         )
 

@@ -16,7 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from io import BytesIO
 from pathlib import Path
@@ -206,6 +206,7 @@ class QueryResults:
     title: str
     poster_url: str | None
     poster_color: int | None
+    other_titles: list[str] = field(default_factory=list)
 
 
 def _extended_episode_counter(
@@ -253,13 +254,17 @@ async def _query_anilist_info_or_db(
         return Result(success=False, message="No results found!", code=ErrorCode.AnilistAPIError)
 
     db_data = await ShowExternalAnilist.find_one(ShowExternalAnilist.ani_id == str(media_id))
+    title_aliases = [media.title.romaji, media.title.english, media.title.native]
+    selected_title = media.title.romaji or media.title.english or media.title.native
+    title_aliases.remove(selected_title)
     if db_data is not None:
         db_data.episodes.extend(_extended_episode_counter(db_data.episodes, expected_count))
         return QueryResults(
             data=db_data,
-            title=media.title.romaji or media.title.english or media.title.native,
+            title=selected_title,
             poster_url=media.coverImage.extraLarge or media.coverImage.large or media.coverImage.medium,
             poster_color=rgbhex_to_rgbint(media.coverImage.color),
+            other_titles=title_aliases,
         )
 
     if expected_count is None:
@@ -308,9 +313,10 @@ async def _query_anilist_info_or_db(
             episodes=external_episodes,
             start_time=start_time.timestamp(),
         ),
-        title=media.title.romaji or media.title.english or media.title.native,
+        title=selected_title,
         poster_url=media.coverImage.extraLarge or media.coverImage.large or media.coverImage.medium,
         poster_color=rgbhex_to_rgbint(media.coverImage.color),
+        other_titles=title_aliases,
     )
 
 
@@ -485,6 +491,13 @@ async def mutate_project_add(
     await ext_info.save()  # type: ignore
 
     project_id = make_uuid()
+
+    project_aliases: list[str] = source_info.other_titles
+    if isinstance(input_data.aliases, list):
+        for alias in input_data.aliases:
+            if isinstance(alias, str) and alias not in project_aliases:
+                project_aliases.append(alias)
+
     roles_selections: list[RoleStatus] = (
         DEFAULT_ROLES_SHOWS if external.type != SearchExternalTypeGQL.BOOKS else DEFAULT_ROLES_MANGA
     )
@@ -640,6 +653,7 @@ async def mutate_project_add(
         statuses=statuses,
         show_id=project_id,
         integrations=_process_input_integration(input_data.integrations),
+        aliases=project_aliases,
     )
 
     logger.info(f"Saving project {project_id}")
@@ -709,6 +723,9 @@ async def mutate_project_update(
             if not found_any:
                 project_info.integrations.append(IntegrationId(id=integration.id, type=integration.type))
             save_changes = True
+
+    if isinstance(input_data.aliases, list):
+        project_info.aliases = input_data.aliases
 
     delete_show_actor: list[ShowActor] = []
     if isinstance(input_data.assignees, list):

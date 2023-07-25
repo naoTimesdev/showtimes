@@ -22,6 +22,7 @@ import strawberry as gql
 from beanie.operators import In
 from bson import ObjectId
 
+from showtimes.extensions.graphql.scalars import Upload
 from showtimes.models.database import (
     ShowProject,
     ShowtimesServer,
@@ -30,12 +31,15 @@ from showtimes.models.database import (
     ShowtimesUserGroup,
 )
 
-from .common import ImageMetadataGQL
+from .common import ImageMetadataGQL, IntegrationInputGQL
 from .partials import PartialServerInterface
 from .projects import ProjectGQL
 from .users import UserGQL, UserTemporaryGQL
 
-__all__ = ("ServerGQL",)
+__all__ = (
+    "ServerGQL",
+    "ServerInputGQL",
+)
 
 
 @gql.type(name="Server", description="The server information")
@@ -71,3 +75,12 @@ class ServerGQL(PartialServerInterface):
             else UserGQL.from_db(cast(ShowtimesUser, owner))
             for owner in owners
         ]
+
+
+@gql.input(name="ServerInput", description="The server information")
+class ServerInputGQL:
+    name: str | None = gql.field(default=gql.UNSET, description="The name of the server")
+    avatar: Upload | None = gql.field(default=gql.UNSET, description="The avatar of the server")
+    integrations: list[IntegrationInputGQL] | None = gql.field(
+        default=gql.UNSET, description="List of integrations to add to the server"
+    )

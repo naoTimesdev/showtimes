@@ -32,9 +32,8 @@ from showtimes.models.database import (
     UserType,
 )
 from showtimes.models.searchdb import UserSearch
+from showtimes.tooling import get_logger
 
-ResultT = TypeVar("ResultT")
-ResultOrT = Union[Tuple[Literal[False], str, str], Tuple[Literal[True], ResultT, None]]
 __all__ = (
     "ResultT",
     "ResultOrT",
@@ -45,57 +44,68 @@ __all__ = (
     "mutate_migrate_user_approve",
     "mutate_reset_password",
 )
+ResultT = TypeVar("ResultT")
+ResultOrT = Union[Tuple[Literal[False], str, str], Tuple[Literal[True], ResultT, None]]
+logger = get_logger("Showtimes.GraphQL.Mutations.Users")
 
 
-async def update_searchdb(user: ShowtimesUser, *, insert: bool = False) -> None:
+async def update_searchdb(user: ShowtimesUser) -> None:
+    logger.debug(f"Updating User Search Index for user {user.user_id}")
     searcher = get_searcher()
-    if insert:
-        await searcher.add_document(UserSearch.from_db(user))
-    else:
-        await searcher.update_document(UserSearch.from_db(user))
+    await searcher.update_document(UserSearch.from_db(user))
 
 
 async def mutate_login_user(
     username: str,
     password: str,
-) -> ResultOrT[UserGQL]:
+) -> ResultOrT[ShowtimesUser]:
+    logger.info(f"Logging in as {username}")
     user = await ShowtimesUserGroup.find_one(ShowtimesUserGroup.username == username, with_children=True)
     if not user:
+        logger.warning(f"User {username} not found")
         return False, "User with associated username not found", ErrorCode.UserNotFound
     if user.is_temp_user():
+        logger.warning(f"User {username} is temporary user")
         return False, "User is temporary user, please do password reset first", ErrorCode.UserMigrate
     user = cast(ShowtimesUser, user)
     if user.password is None:
+        logger.warning(f"User {username} has no password set")
         return False, "User has no password set, please do password reset first", ErrorCode.UserMigrate
 
     is_verify, new_password = await verify_password(password, user.password)
     if not is_verify:
+        logger.warning(f"User {username} password is not correct")
         return False, "Password is not correct", ErrorCode.UserInvalidPass
     if new_password is not None and user is not None:
         user.password = new_password
         await user.save_changes()  # type: ignore
-    return True, UserGQL.from_db(user), None
+    logger.info(f"User {username} authenticated!")
+    return True, user, None
 
 
 async def mutate_register_user(
     username: str,
     password: str,
 ) -> ResultOrT[UserTemporaryGQL]:
+    logger.info(f"Registering user {username}")
+    existing_user = await ShowtimesUser.find_one(ShowtimesUser.username == username)
+    if existing_user:
+        logger.warning(f"User {username} already exists")
+        return False, "User already exists", ErrorCode.UserAlreadyExist
     regist_user = await ShowtimesTemporaryUser.find_one(
         ShowtimesTemporaryUser.username == username,
         ShowtimesTemporaryUser.type == ShowtimesTempUserType.REGISTER,
     )
     if regist_user:
+        logger.warning(f"User {username} already has register request, returning it")
         return True, UserTemporaryGQL.from_db(regist_user), None
 
     if len(password) < 8:
+        logger.warning(f"User {username} password is too short")
         return False, "Password must be at least 8 characters long", ErrorCode.UserRequirementPass
     if len(username) < 4:
+        logger.warning(f"User {username} username is too short")
         return False, "Username must be at least 4 characters long", ErrorCode.UserRequirementUsername
-
-    user = await ShowtimesUser.find_one(ShowtimesUser.username == username)
-    if user:
-        return False, "User already exists", ErrorCode.UserAlreadyExist
 
     regist_user = ShowtimesTemporaryUser(
         type=ShowtimesTempUserType.REGISTER,
@@ -103,6 +113,7 @@ async def mutate_register_user(
         password=await encrypt_password(password),
     )
 
+    logger.info(f"Saving temporary user {username} to database")
     await regist_user.save()  # type: ignore
     return True, UserTemporaryGQL.from_db(regist_user), None
 
@@ -111,25 +122,19 @@ async def mutate_migrate_user(
     username: str,
     password: str,
 ) -> ResultOrT[UserTemporaryGQL]:
+    logger.info(f"Migrating user {username}")
     migrate_user = await ShowtimesTemporaryUser.find_one(
         ShowtimesTemporaryUser.username == username,
         ShowtimesTemporaryUser.type == ShowtimesTempUserType.MIGRATION,
     )
-    if migrate_user:
-        return True, UserTemporaryGQL.from_db(migrate_user), None
+    if migrate_user is None:
+        logger.warning(f"User {username} has no migration request!")
+        return False, "User has no migration request", ErrorCode.UserNotFound
 
-    user = await ShowtimesUser.find_one(ShowtimesUser.username == username)
-    if not user:
-        return False, "User not found", ErrorCode.UserNotFound
+    migrate_user.password = await encrypt_password(password)
+    await migrate_user.save()  # type: ignore
 
-    regist_user = ShowtimesTemporaryUser(
-        type=ShowtimesTempUserType.MIGRATION,
-        username=username,
-        password=await encrypt_password(password),
-    )
-
-    await regist_user.save()  # type: ignore
-    return True, UserTemporaryGQL.from_db(regist_user), None
+    return True, UserTemporaryGQL.from_db(migrate_user), None
 
 
 async def mutate_register_user_approve(
@@ -137,18 +142,22 @@ async def mutate_register_user_approve(
     password: str,
     approval_code: str,
 ) -> ResultOrT[UserGQL]:
+    logger.info(f"Approving register user {username}")
     user = await ShowtimesTemporaryUser.find_one(
         ShowtimesTemporaryUser.username == username,
         ShowtimesTemporaryUser.type == ShowtimesTempUserType.REGISTER,
     )
     if not user:
+        logger.warning(f"User {username} not found")
         return False, "User not found", ErrorCode.UserNotFound
 
     if user.approval_code != approval_code:
+        logger.warning(f"User {username} approval code is not correct")
         return False, "Approval code is not correct", ErrorCode.UserApprovalIncorrect
 
     is_verify, _ = await verify_password(password, user.password)
     if not is_verify:
+        logger.warning(f"User {username} password is not correct")
         return False, "Password is not correct", ErrorCode.UserInvalidPass
 
     new_user = ShowtimesUser(
@@ -158,12 +167,15 @@ async def mutate_register_user_approve(
         user_id=user.user_id,
     )
 
+    logger.info(f"Saving user {username} to database")
     _new_user = await ShowtimesUser.insert_one(new_user)
     if _new_user is None:
+        logger.warning(f"Failed to register user {username}")
         return False, "Failed to register user", ErrorCode.ServerError
+    logger.info(f"Deleting temporary user {username} from database")
     await user.delete()  # type: ignore
 
-    await update_searchdb(new_user, insert=True)
+    await update_searchdb(new_user)
 
     return True, UserGQL.from_db(new_user), None
 
@@ -173,14 +185,17 @@ async def mutate_migrate_user_approve(
     password: str,
     approval_code: str,
 ) -> ResultOrT[UserGQL]:
+    logger.info(f"Approving migrate user {username}")
     user: ShowtimesTemporaryUser | None = await ShowtimesTemporaryUser.find_one(
         ShowtimesTemporaryUser.username == username,
         ShowtimesTemporaryUser.type == ShowtimesTempUserType.MIGRATION,
     )
     if not user:
+        logger.warning(f"User {username} not found")
         return False, "User not found", ErrorCode.UserNotFound
 
     if user.approval_code != approval_code:
+        logger.warning(f"User {username} approval code is not correct")
         return False, "Approval code is not correct", ErrorCode.UserApprovalIncorrect
 
     new_user = ShowtimesUser(
@@ -190,9 +205,11 @@ async def mutate_migrate_user_approve(
         privilege=UserType.USER,
         user_id=user.user_id,
     )
+    logger.info(f"Saving user {username} to database")
     await user.delete()  # type: ignore
     _new_user = await ShowtimesUser.insert_one(new_user)
     if not _new_user:
+        logger.warning(f"Failed to migrate user {username}")
         return False, "Failed to migrate user", ErrorCode.ServerError
 
     await update_searchdb(new_user)

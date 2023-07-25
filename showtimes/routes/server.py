@@ -17,13 +17,18 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.datastructures import Default
 
 from showtimes.controllers.claim import get_claim_status
+from showtimes.controllers.searcher import get_searcher
 from showtimes.controllers.security import encrypt_password
-from showtimes.models.database import ShowtimesUser, UserType
+from showtimes.controllers.sessions.handler import get_session_handler
+from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, UserType
+from showtimes.models.searchdb import ProjectSearch, ServerSearch, UserSearch
+from showtimes.models.session import UserSession
 
 from ..extensions.fastapi.responses import ORJSONXResponse, ResponseType
 
@@ -70,6 +75,8 @@ async def server_claim_post(claim_request: ServerClaimRequest):
 
     await user_admin.save()  # type: ignore
     claim_latch.claimed = True
+    searcher = get_searcher()
+    await searcher.update_document(UserSearch.from_db(user_admin))
 
     return ResponseType(error="Server claimed").to_orjson()
 
@@ -78,3 +85,50 @@ async def server_claim_post(claim_request: ServerClaimRequest):
 def server_claim_get():
     claim_latch = get_claim_status()
     return ResponseType(data=claim_latch.claimed).to_orjson()
+
+
+async def protected(request: Request):
+    session = get_session_handler()
+    response = await session(request)
+    return response
+
+
+@router.post("/reindex/users", response_model=ResponseType, description="Reindex the users to the search database")
+async def server_search_reindex_users(user: Annotated[UserSession, Depends(protected)]):
+    if user.privilege != UserType.ADMIN:
+        return ResponseType(error="You are not authorized to perform this action", code=403).to_orjson(403)
+    searcher = get_searcher()
+
+    prompted_data = []
+    async for show_user in ShowtimesUser.find_all():
+        prompted_data.append(UserSearch.from_db(show_user))
+    await searcher.update_documents(prompted_data)
+    return ResponseType(error="Users is being reindexed").to_orjson()
+
+
+@router.post("/reindex/servers", response_model=ResponseType, description="Reindex the servers to the search database")
+async def server_search_reindex_servers(user: Annotated[UserSession, Depends(protected)]):
+    if user.privilege != UserType.ADMIN:
+        return ResponseType(error="You are not authorized to perform this action", code=403).to_orjson(403)
+    searcher = get_searcher()
+
+    prompted_data = []
+    async for show_user in ShowtimesServer.find_all():
+        prompted_data.append(ServerSearch.from_db(show_user))
+    await searcher.update_documents(prompted_data)
+    return ResponseType(error="Servers is being reindexed").to_orjson()
+
+
+@router.post(
+    "/reindex/projects", response_model=ResponseType, description="Reindex the projects to the search database"
+)
+async def server_search_reindex_projects(user: Annotated[UserSession, Depends(protected)]):
+    if user.privilege != UserType.ADMIN:
+        return ResponseType(error="You are not authorized to perform this action", code=403).to_orjson(403)
+    searcher = get_searcher()
+
+    prompted_data = []
+    async for show_user in ShowProject.find_all():
+        prompted_data.append(ProjectSearch.from_db(show_user))
+    await searcher.update_documents(prompted_data)
+    return ResponseType(error="Servers is being reindexed").to_orjson()

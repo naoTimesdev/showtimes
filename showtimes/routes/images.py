@@ -53,13 +53,30 @@ def _modern_filetype_guess(filename: str):
     return "application/octet-stream"
 
 
-@router.get("/{type}/{parent}/{id}/{filename}")
-async def images_routing_get(type: str, parent: str, id: str, filename: str):
+@router.get("/{type}/{id}/{filename}", description="Get image from storage with only key ID")
+async def images_routing_no_parent_get(type: str, id: str, filename: str):
     storage = get_storage()
 
     async def iterator_stream():
         try:
-            async for chunk in storage.stream_download(parent, id, filename, type):
+            async for chunk in storage.stream_download(base_key=id, parent_id=None, filename=filename, type=type):
+                yield chunk
+        except FileNotFoundError as exc:
+            raise HTTPException(404, "Image not found") from exc
+
+    mime_type, _ = guess_type(filename)
+    mime_type = mime_type or _modern_filetype_guess(filename)
+
+    return StreamingResponse(iterator_stream(), media_type=mime_type)
+
+
+@router.get("/{type}/{parent}/{id}/{filename}", description="Get image from storage with parent ID and key ID")
+async def images_routing_with_parent_get(type: str, parent: str, id: str, filename: str):
+    storage = get_storage()
+
+    async def iterator_stream():
+        try:
+            async for chunk in storage.stream_download(base_key=parent, parent_id=id, filename=filename, type=type):
                 yield chunk
         except FileNotFoundError as exc:
             raise HTTPException(404, "Image not found") from exc

@@ -50,6 +50,7 @@ class ErrorCode:
     SessionExist = "SESSION_EXIST"
     SessionUnknown = "SESSION_UNKNOWN"
     SessionNotMaster = "SESSION_NOT_MASTER"
+    SessionNotAllowed = "SESSION_NOT_ALLOWED"
     AnilistAPIError = "ANILIST_API_ERROR"
     AnilistAPIUnavailable = "ANILIST_API_UNAVAILABLE"
     TMDbAPIUnavailable = "TMDB_API_UNAVAILABLE"
@@ -59,6 +60,9 @@ class ErrorCode:
     ServerNotAllowed = "SERVER_NOT_ALLOWED"
     ServerError = "SERVER_ERROR"
     ProjectNotFound = "PROJECT_NOT_FOUND"
+
+    # Add
+    ServerAddMissingNmae = "SERVER_ADD_MISSING_NAME"
 
 
 UserResult = gql.union(

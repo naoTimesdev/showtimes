@@ -25,6 +25,7 @@ import magic
 from fastapi import UploadFile
 
 from showtimes.controllers.storages import get_storage
+from showtimes.models.database import ImageMetadata
 from showtimes.utils import make_uuid
 
 from .scalars import Upload
@@ -33,6 +34,7 @@ __all__ = (
     "InvalidMimeType",
     "get_file_mimetype",
     "handle_image_upload",
+    "delete_image_upload",
 )
 
 
@@ -85,35 +87,50 @@ async def get_file_mimetype(file: UploadFile):
     return detect
 
 
-async def handle_image_upload(file: Upload, uuid: str, image_type: str) -> UploadResult:
+async def handle_image_upload(
+    file: Upload, base_key: str, parent_id: str | None = None, filename: str | None = None, *, type: str
+) -> UploadResult:
     """
     Handle file upload from GraphQL
     """
     if not isinstance(file, UploadFile):
         raise TypeError("Expected UploadFile, got %r" % file)
 
+    file_cast = cast(UploadFile, file)
     # Handle upload
     stor = get_storage()
-    mimetype = await get_file_mimetype(file)
+    mimetype = await get_file_mimetype(file_cast)
     if mimetype == "application/octet-stream":
-        magic_bits = await cast(UploadFile, file).read(16)
+        magic_bits = await file_cast.read(16)
         # Special way to detect AVIF/HEIF/HEIC/JXL
         # Seems like libmagic doesn't detect them properly
         mimetype = _mmagic_modern_img_format(magic_bits) or mimetype
     if not mimetype.startswith("image/"):
         raise InvalidMimeType(mimetype, "image/*")
 
-    uuid_gen = str(make_uuid())
+    uuid_gen = filename or str(make_uuid())
     extension = guess_extension(mimetype) or ".bin"
-    filename = f"{uuid_gen}{extension}"
+    actual_filename = f"{uuid_gen}{extension}"
+
+    # Seek back to start
+    await file_cast.seek(0)
 
     # Upload file
     result = await stor.stream_upload(
-        base_key=image_type,
-        parent_id=uuid,
-        filename=filename,
+        base_key=base_key,
+        parent_id=parent_id,
+        filename=actual_filename,
         data=file,
+        type=type,
     )
     if result is None:
         raise RuntimeError("Failed to upload file")
-    return UploadResult(filename=uuid_gen, extension=extension, file_size=result.size)
+    return UploadResult(filename=actual_filename, extension=extension, file_size=result.size)
+
+
+async def delete_image_upload(image_meta: ImageMetadata):
+    """
+    Delete image upload from storage
+    """
+    stor = get_storage()
+    await stor.delete(image_meta.key, image_meta.parent, image_meta.filename, image_meta.type)

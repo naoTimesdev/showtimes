@@ -20,10 +20,12 @@ from typing import Type
 
 import strawberry as gql
 
+from showtimes.graphql.models.enums import IntegrationInputActionGQL
 from showtimes.models.database import ImageMetadata, IntegrationId
 
 __all__ = (
     "IntegrationGQL",
+    "IntegrationInputGQL",
     "ImageMetadataGQL",
 )
 
@@ -41,6 +43,16 @@ class IntegrationGQL:
             id=integration.id,
             type=integration.type,
         )
+
+
+@gql.input(name="IntegrationInput", description="The integration information")
+class IntegrationInputGQL:
+    id: str = gql.field(description="The integration ID or value")
+    """The integration ID"""
+    type: str = gql.field(description="The integration type (in full capital)")
+    """The integration type"""
+    action: IntegrationInputActionGQL = gql.field(description="The integration action")
+    """The integration action"""
 
 
 @gql.type(name="ImageMetadata", description="An image for an entity")

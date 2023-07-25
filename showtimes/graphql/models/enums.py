@@ -29,6 +29,7 @@ __all__ = (
     "SearchExternalTypeGQL",
     "SearchTitleTypeGQL",
     "SearchSourceTypeGQL",
+    "IntegrationInputActionGQL",
 )
 
 UserTypeGQL = gql.enum(
@@ -69,3 +70,9 @@ class SearchSourceTypeGQL(Enum):
     TMDB = "tmdb"
     DATABASE = "database"
     UNKNOWN = "unknown"
+
+
+@gql.enum(name="IntegrationInputAction", description="The action to be taken for the integration")
+class IntegrationInputActionGQL(Enum):
+    ADD = "add"
+    DELETE = "delete"

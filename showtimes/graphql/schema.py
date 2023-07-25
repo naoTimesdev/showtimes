@@ -31,12 +31,13 @@ from showtimes.extensions.graphql.scalars import Upload as UploadGQL
 from showtimes.graphql.cursor import Cursor
 from showtimes.graphql.models.pagination import Connection, SortDirection
 from showtimes.graphql.models.projects import ProjectGQL
-from showtimes.graphql.models.servers import ServerGQL
+from showtimes.graphql.models.servers import ServerGQL, ServerInputGQL
 from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, UserType
 from showtimes.models.session import ServerSessionInfo
 from showtimes.utils import make_uuid
 
 from .models import ErrorCode, Result, UserGQL, UserSessionGQL, UserTemporaryGQL
+from .mutations.servers import mutate_server_add, mutate_server_update
 from .mutations.users import (
     mutate_login_user,
     mutate_migrate_user,
@@ -228,7 +229,7 @@ class Mutation:
         success, user, code = await mutate_login_user(username, password)
         if not success and isinstance(user, str):
             return Result(success=False, message=user, code=code)
-        user_info = cast(UserGQL, user)
+        user_info = UserGQL.from_db(cast(ShowtimesUser, user))
         info.context.session_latch = True
         info.context.user = user_info.to_session()
         return user_info
@@ -328,6 +329,13 @@ class Mutation:
             info.context.session_latch = True
             return Result(success=True, message=None, code=None)
 
+        if info.context.user.api_key is not None:
+            return Result(
+                success=False,
+                message="You are using an API key, you cannot select a server",
+                code=ErrorCode.SessionNotAllowed,
+            )
+
         owner_id: str | None = None
         if info.context.user.privilege != UserType.ADMIN:
             owner_id = info.context.user.object_id
@@ -362,6 +370,47 @@ class Mutation:
         user.api_key = api_new_key
         await user.save()  # type: ignore
         return Result(success=True, message=api_new_key, code=None)
+
+    # Server Mutation
+    @gql.mutation(description="Add a new server")
+    async def add_server(self, data: ServerInputGQL, info: Info[SessionQLContext, None]) -> Result | ServerGQL:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        user_uuid = UUID(info.context.user.user_id)
+        success, srv_info, err_code = await mutate_server_add(user_uuid, data)
+        if not success and isinstance(srv_info, str):
+            return Result(success=False, message=srv_info, code=err_code)
+        srv_info = cast(ShowtimesServer, srv_info)
+
+        return ServerGQL.from_db(srv_info)
+
+    @gql.mutation(description="Update a server")
+    async def update_server(
+        self, data: ServerInputGQL, info: Info[SessionQLContext, None], id: UUID | None = None
+    ) -> Result | ServerGQL:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        srv_id: UUID | None = None
+        if info.context.user.active is not None:
+            srv_id = UUID(info.context.user.active.server_id)
+        if isinstance(id, UUID):
+            srv_id = id
+
+        if srv_id is None:
+            return Result(
+                success=False,
+                message="No server selected, either use mutation selectServer or add id param to this query",
+                code=ErrorCode.ServerUnselect,
+            )
+
+        success, srv_info, err_code = await mutate_server_update(srv_id, data)
+        if not success and isinstance(srv_info, str):
+            return Result(success=False, message=srv_info, code=err_code)
+        srv_info = cast(ShowtimesServer, srv_info)
+
+        return ServerGQL.from_db(srv_info)
 
 
 @gql.type

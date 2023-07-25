@@ -17,7 +17,7 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, TypeVar
 from uuid import UUID
 
 from beanie import Document, Insert, Link, Replace, Save, SaveChanges, Update, ValidateOnSave, before_event
@@ -28,6 +28,12 @@ from ..utils import generate_custom_code, make_uuid
 from ._doc import _coerce_to_pendulum, pendulum_utc
 
 AllEvent = [Insert, Replace, Update, Save, SaveChanges, ValidateOnSave]
+DocT = TypeVar("DocT", bound=Document)
+
+
+def to_link(doc: DocT) -> Link[DocT]:
+    dbref = doc.to_ref()
+    return Link(ref=dbref, model_class=doc.__class__)
 
 
 class ImageMetadata(BaseModel):
@@ -39,7 +45,7 @@ class ImageMetadata(BaseModel):
     """The type of the image"""
     key: str
     """The key of the image"""
-    parent: str
+    parent: str | None
     """The parent of the image, if any."""
     filename: str
     """The filename of the image"""
@@ -47,6 +53,8 @@ class ImageMetadata(BaseModel):
     """The format of the image"""
 
     def as_url(self):
+        if self.parent is None:
+            return f"/{self.type}/{self.key}/{self.filename}"
         return f"/{self.type}/{self.key}/{self.parent}/{self.filename}"
 
 

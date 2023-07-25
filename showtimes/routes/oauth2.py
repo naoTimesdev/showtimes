@@ -16,12 +16,12 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Annotated, cast
 from urllib.parse import quote, unquote
 
 import aiohttp
 import pendulum
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.datastructures import Default
 from fastapi.responses import RedirectResponse
 
@@ -33,12 +33,13 @@ from showtimes.controllers.oauth2.discord import (
 from showtimes.controllers.redisdb import get_redis
 from showtimes.controllers.sessions.handler import get_session_handler
 from showtimes.extensions.fastapi.errors import ShowtimesException
+from showtimes.graphql.mutations.users import mutate_login_user
 from showtimes.models.database import ShowtimesUser, ShowtimesUserDiscord, UserType
 from showtimes.models.session import UserSession
 from showtimes.tooling import get_env_config
 from showtimes.utils import generate_custom_code
 
-from ..extensions.fastapi.responses import ORJSONXResponse
+from ..extensions.fastapi.responses import ORJSONXResponse, ResponseType
 
 __all__ = ("router",)
 router = APIRouter(
@@ -55,6 +56,33 @@ DISCORD_SECRET = env_conf.get("DISCORD_CLIENT_SECRET")
 def verify_discord_client():
     if DISCORD_ID is None or DISCORD_SECRET is None:
         raise ShowtimesException(500, "Discord client is unavailable.")
+
+
+async def protected(request: Request):
+    session = get_session_handler()
+    response = await session(request)
+    return response
+
+
+@router.post("/password", response_model=ResponseType, description="Login using username and password.")
+async def oauth2_password_login(username: str, password: str):
+    session_handler = get_session_handler()
+    _, show_user, _ = await mutate_login_user(username, password)
+    if isinstance(show_user, ShowtimesUser):
+        response_data = ResponseType(error="Successfully logged in.", code=200).to_orjson(200)
+        await session_handler.set_session(UserSession.from_db(show_user), response_data)
+        return response_data
+
+    return ResponseType(error=show_user, code=400).to_orjson(400)
+
+
+@router.post("/logout", response_model=ResponseType, description="Logout session.")
+async def oauth2_password_logout(user: Annotated[UserSession, Depends(protected)]):
+    session_handler = get_session_handler()
+    response_data = ResponseType(error="Successfully logged out.", code=200).to_orjson(200)
+    await session_handler.remove_session(user, response_data)
+
+    return response_data
 
 
 discord_router = APIRouter(

@@ -354,8 +354,8 @@ def create_app():
         ClaimWebpage = HTMLResponse((TEMPLATE_DIR / "claim.html").read_text())
         return ClaimWebpage
 
-    @app.route("/favicon.ico", ["GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS"], include_in_schema=False)
-    async def _root_favicon():
+    @app.get("/favicon.ico", include_in_schema=False)
+    def _root_favicon():
         return FileResponse(ASSETS_FOLDER / "favicon.ico")
 
     logger.info("Backend app created!")

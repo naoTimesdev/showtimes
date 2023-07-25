@@ -20,7 +20,18 @@ from enum import Enum
 from typing import Optional, TypeVar
 from uuid import UUID
 
-from beanie import Document, Insert, Link, Replace, Save, SaveChanges, Update, ValidateOnSave, before_event
+from beanie import (
+    Document,
+    Insert,
+    Link,
+    Replace,
+    Save,
+    SaveChanges,
+    Update,
+    ValidateOnSave,
+    after_event,
+    before_event,
+)
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
@@ -211,9 +222,9 @@ class ShowExternalType(str, Enum):
 
 class ShowExternalEpisode(BaseModel):
     episode: int
+    airtime: float
     season: int = Field(default=1)
     title: Optional[str] = None
-    airtime: Optional[float] = None
     """The unix timestamp of the airing time, if any."""
 
 
@@ -284,9 +295,13 @@ class ShowProject(Document):
     updated_at: DateTime = Field(default_factory=pendulum_utc)
     """The time this project was last updated."""
 
-    def _swap_revision(self):
+    @after_event(*AllEvent)
+    def coerce_penulum(self):
         _coerce_to_pendulum(self)
-        return super()._swap_revision()
+
+    def _save_state(self):
+        _coerce_to_pendulum(self)
+        super()._save_state()
 
     class Settings:
         name = "ShowtimesProjects"

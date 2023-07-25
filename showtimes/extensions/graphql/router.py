@@ -63,9 +63,15 @@ class SessionGraphQLRouter(GraphQLRouter):
                     pass
                     # Delete user session
                 if cr_user is not None:
-                    await context.session.remove_session(cr_user, response)
+                    if not context.latch_no_resp:
+                        await context.session.remove_session(cr_user, response)
+                    else:
+                        await context.session.remove_session(cr_user)
             else:
-                await context.session.set_or_update_session(context.user, response)
+                if not context.latch_no_resp:
+                    await context.session.set_or_update_session(context.user, response)
+                else:
+                    await context.session.set_or_update_session(context.user)
         # -->
 
         return response

@@ -31,3 +31,5 @@ class SessionQLContext(BaseContext):
         self.session: SessionHandler = session
         self.user: Optional[UserSession] = user
         self.session_latch: bool = False
+        # Do not update cookie, but only internal session.
+        self.latch_no_resp: bool = False

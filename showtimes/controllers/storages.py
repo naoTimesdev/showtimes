@@ -551,7 +551,7 @@ class S3Storage(Storage):
         try:
             resp = await self._client.get_object(Bucket=self.__bucket, Key=path)
             async with resp["Body"] as stream:
-                yield await stream.read(1024)
+                yield await stream.read()
         except self._client.exceptions.NoSuchKey as exc:
             raise FileNotFoundError from exc
 

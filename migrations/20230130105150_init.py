@@ -438,10 +438,13 @@ async def _process_showtimes_project_external_data(project: ShowAnimeSchema, *, 
 
     episode_data: list[newdb.ShowExternalEpisode] = []
     for status in project.status:
+        airtime = pendulum.now(tz="UTC").timestamp()
+        if status.airtime is not None:
+            airtime = float(status.airtime)
         episode_data.append(
             newdb.ShowExternalEpisode(
                 episode=status.episode,
-                airtime=status.airtime,
+                airtime=airtime,
             )
         )
     new_data = newdb.ShowExternalAnilist(

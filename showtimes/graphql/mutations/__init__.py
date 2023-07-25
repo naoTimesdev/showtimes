@@ -7,5 +7,6 @@ The mutation handler for showtimes.
 :license: AGPL-3.0, see LICENSE for more details.
 """
 
+from .projects import *
 from .servers import *
 from .users import *

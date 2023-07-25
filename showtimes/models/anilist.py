@@ -102,5 +102,9 @@ class AnilistQueryMedia(AttributeDict, Generic[AT]):
     media: AT
 
 
+class AnilistQueryMediaX(AttributeDict, Generic[AT]):
+    Media: AT
+
+
 class AnilistPagedMedia(AttributeDict, Generic[PT]):
     Page: PT

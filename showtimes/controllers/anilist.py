@@ -20,11 +20,14 @@ from math import ceil
 from typing import TYPE_CHECKING, Optional, cast
 
 import aiohttp
+import pendulum
+from pendulum.datetime import DateTime
 
 from showtimes.errors import ShowtimesControllerUninitializedError
+from showtimes.models.anilist import AnilistFuzzyDate
 
 from ..utils import complex_walk
-from .gqlapi import GraphQLClient, GraphQLResult
+from .gqlapi import GraphQLClient, GraphQLResult, PredicateFunc
 from .ratelimiter import NetworkRateLimiter
 
 if TYPE_CHECKING:
@@ -34,6 +37,9 @@ __all__ = (
     "AnilistAPI",
     "get_anilist_client",
     "init_anilist_client",
+    "parse_anilist_fuzzy_date",
+    "multiply_anilist_date",
+    "rgbhex_to_rgbint",
 )
 
 
@@ -78,7 +84,13 @@ class AnilistAPI:
             self._handle_x_rate_headers(requested.headers)
             return requested
 
-    async def paginate(self, query: str, variables: Optional[dict] = None, operation_name: Optional[str] = None):
+    async def paginate(
+        self,
+        query: str,
+        variables: Optional[dict] = None,
+        operation_name: Optional[str] = None,
+        predicate: PredicateFunc | None = None,
+    ):
         variables = variables or {}
 
         def internal_function(data: Optional[dict]):
@@ -97,7 +109,9 @@ class AnilistAPI:
             return has_next_page, current_page + 1, "page"
 
         await self._limiter.drip()
-        async for result, pageInfo in self._requester.paginate(query, internal_function, variables, operation_name):
+        async for result, pageInfo in self._requester.paginate(
+            query, predicate or internal_function, variables, operation_name
+        ):
             self._handle_x_rate_headers(result.headers)
             yield result
             if pageInfo.hasMore:
@@ -122,3 +136,46 @@ async def init_anilist_client(session: aiohttp.ClientSession | None = None):
     if _ANILIST_CLIENT is None:
         session = session or aiohttp.ClientSession()
         _ANILIST_CLIENT = AnilistAPI(session)
+
+
+# Helpers
+
+
+def parse_anilist_fuzzy_date(fuzzy_date: AnilistFuzzyDate) -> DateTime | None:
+    year: int | None = fuzzy_date.get("year", None)
+    month: int | None = fuzzy_date.get("month", None)
+    day: int | None = fuzzy_date.get("day", None)
+
+    ext_dt: list[str] = []
+    data_dt: list[str] = []
+    if year is not None:
+        ext_dt.append("YYYY")
+        data_dt.append(str(year))
+    if month is not None:
+        ext_dt.append("M")
+        data_dt.append(str(month))
+    if day is not None:
+        ext_dt.append("D")
+        data_dt.append(str(day))
+
+    if len(data_dt) < 2:
+        return None
+
+    return pendulum.from_format("-".join(data_dt), "-".join(ext_dt))
+
+
+def multiply_anilist_date(start_time: int, episode: int) -> DateTime:
+    WEEKS = 7 * 24 * 60 * 60
+    expected = start_time + (episode * WEEKS)
+    return pendulum.from_timestamp(expected)
+
+
+def rgbhex_to_rgbint(color: str | None) -> int:
+    if color is None:
+        return 2012582
+
+    hexed_str = color.lstrip("#").upper()
+    R = int(hexed_str[0:2], 16)
+    G = int(hexed_str[2:4], 16)
+    B = int(hexed_str[4:6], 16)
+    return 256 * 256 * R + 256 * G + B

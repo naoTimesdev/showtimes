@@ -22,14 +22,21 @@ import strawberry as gql
 from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
 
-from showtimes.extensions.graphql.scalars import DateTime
-from showtimes.graphql.models.collab import ProjectCollabLinkGQL
+from showtimes.extensions.graphql.scalars import DateTime, Upload
 from showtimes.models.database import ShowProject, ShowtimesCollaborationLinkSync
 
-from .common import ImageMetadataGQL, IntegrationGQL
+from .collab import ProjectCollabLinkGQL
+from .common import ImageMetadataGQL, IntegrationGQL, IntegrationInputGQL
+from .enums import SearchExternalTypeGQL, SearchSourceTypeGQL
 from .partials import PartialProjectInterface, ProjectAssigneeGQL, ProjectStatusGQL, ShowPosterGQL
 
-__all__ = ("ProjectGQL",)
+__all__ = (
+    "ProjectGQL",
+    "ProjectInputExternalGQL",
+    "ProjectInputAssigneeInfoGQL",
+    "ProjectInputAssigneeGQL",
+    "ProjectInputGQL",
+)
 
 
 @gql.type(name="Project", description="The project information")
@@ -79,3 +86,55 @@ class ProjectGQL(PartialProjectInterface):
             project_id=str(project.id),
             ex_proj_id=str(project.external.ref.id),
         )
+
+
+@gql.input(name="ProjectInputExternal", description="The project external input information")
+class ProjectInputExternalGQL:
+    ref: str = gql.field(description="The reference ID of the project")
+    type: SearchExternalTypeGQL = gql.field(description="The type of the project external data")
+    source: SearchSourceTypeGQL = gql.field(description="The source of the project external data")
+
+
+@gql.input(name="ProjectInputAssigneeInfo", description="The project assignee input information")
+class ProjectInputAssigneeInfoGQL:
+    id: str = gql.field(description="The ID of the assignee")
+    name: str = gql.field(description="The name of the assignee")
+    integrations: list[IntegrationInputGQL] | None = gql.field(
+        default=gql.UNSET, description="List of integrations to add to the assignee"
+    )
+
+
+@gql.input(name="ProjectInputAssignee", description="The project assignee input information")
+class ProjectInputAssigneeGQL:
+    key: str = gql.field(description="The key of the assignee")
+    info: ProjectInputAssigneeInfoGQL | None = gql.field(
+        default=gql.UNSET, description="The information of the assignee"
+    )
+
+
+@gql.input(name="ProjectInputRoles", description="The project roles input information")
+class ProjectInputRolesGQL:
+    key: str = gql.field(description="The key of the role")
+    name: str = gql.field(description="The name of the role")
+
+
+@gql.input(name="ProjectInput", description="The project input information")
+class ProjectInputGQL:
+    name: str | None = gql.field(default=gql.UNSET, description="The name of the server")
+    poster: Upload | None = gql.field(default=gql.UNSET, description="The avatar of the server")
+    integrations: list[IntegrationInputGQL] | None = gql.field(
+        default=gql.UNSET, description="List of integrations to add to the server"
+    )
+    external: ProjectInputExternalGQL | None = gql.field(
+        default=gql.UNSET, description="The external project information"
+    )
+    assignees: list[ProjectInputAssigneeGQL] | None = gql.field(
+        default=gql.UNSET,
+        description=(
+            "List of assignees to add to the project, if missing will use the default roles assignments per type"
+        ),
+    )
+    roles: list[ProjectInputRolesGQL] | None = gql.field(
+        default=gql.UNSET, description="List of roles to add to the project, if missing will use the default roles"
+    )
+    count: int | None = gql.field(default=gql.UNSET, description="The episode/chapter count override for the project")

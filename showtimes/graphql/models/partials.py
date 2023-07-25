@@ -62,6 +62,7 @@ class PartialServerInterface:
     """The server username"""
     avatar: Optional[ImageMetadataGQL] = gql.field(description="The server image")
     """The server image"""
+    integrations: list[IntegrationGQL] = gql.field(description="The server integrations")
 
     server_id: gql.Private[str]  # ObjectId
     project_links: gql.Private[list[str]]  # ObjectId
@@ -76,6 +77,7 @@ class PartialServerGQL(PartialServerInterface):
             id=server.server_id,
             name=server.name,
             avatar=ImageMetadataGQL.from_db(server.avatar) if server.avatar else None,
+            integrations=[IntegrationGQL.from_db(integration) for integration in server.integrations],
             server_id=str(server.id),
             project_links=[str(i.ref.id) for i in server.projects],
             owner_links=[str(i.ref.id) for i in server.owners],

@@ -48,6 +48,7 @@ from showtimes.graphql.models.enums import (
 )
 from showtimes.graphql.models.fallback import ErrorCode, Result
 from showtimes.graphql.models.projects import (
+    ProjectEpisodeInput,
     ProjectInputAssigneeGQL,
     ProjectInputAssigneeInfoGQL,
     ProjectInputExternalGQL,
@@ -79,10 +80,15 @@ from showtimes.models.database import (
     to_link,
 )
 from showtimes.models.searchdb import ProjectSearch, ServerSearch
+from showtimes.models.timeseries import TimeSeriesProjectEpisodeChanges
 from showtimes.tooling import get_logger
 from showtimes.utils import complex_walk, make_uuid
 
-__all__ = ("mutate_project_add",)
+__all__ = (
+    "mutate_project_add",
+    "mutate_project_delete",
+    "mutate_project_update_episode",
+)
 ResultT = TypeVar("ResultT")
 ResultOrT: TypeAlias = tuple[Literal[False], str, str] | tuple[Literal[True], ResultT, None]
 logger = get_logger("Showtimes.GraphQL.Mutations.Servers")
@@ -276,7 +282,7 @@ async def _query_anilist_info_or_db(
             act_eps = episode - current_count + 1
             external_episodes.append(
                 ShowExternalEpisode(
-                    episode=act_eps,
+                    episode=act_eps + 1,
                     airtime=multiply_anilist_date(
                         int(last_ep_air),
                         act_eps,
@@ -328,12 +334,8 @@ def _process_input_integration(integrations: list[IntegrationInputGQL] | None):
     ]
 
 
-async def mutate_project_delete(
-    project_id: UUID,
-    owner_id: str | None = None,  # None assumes admin
-) -> Result:
-    stor = get_storage()
-    logger.info(f"Deleting project for {project_id}")
+async def _find_project(project_id: UUID, owner_id: str | None = None) -> Result | tuple[ShowProject, ShowtimesServer]:
+    logger.info(f"Finding project for {project_id}")
 
     project_info = await ShowProject.find_one(ShowProject.show_id == project_id)
     if not project_info:
@@ -351,6 +353,20 @@ async def mutate_project_delete(
         return Result(
             success=False, message="You are not one of the owner of this server", code=ErrorCode.ServerNotAllowed
         )
+
+    return project_info, server_info
+
+
+async def mutate_project_delete(
+    project_id: UUID,
+    owner_id: str | None = None,  # None assumes admin
+) -> Result:
+    stor = get_storage()
+    find_results = await _find_project(project_id, owner_id)
+    if isinstance(find_results, Result):
+        return find_results
+
+    project_info, server_info = find_results
 
     logger.info(f"Deleting project {project_id} poster")
     if project_info.poster.image:
@@ -581,7 +597,7 @@ async def mutate_project_add(
                 return Result(
                     success=False,
                     message="Unable to upload poster from source",
-                    code=ErrorCode.ImageUplaodFailed,
+                    code=ErrorCode.ImageUploadFailed,
                 )
 
             if file_ext.startswith("."):
@@ -626,3 +642,73 @@ async def mutate_project_add(
     await server_info.save()  # type: ignore
     await update_server_searchdb(server_info)
     return _project
+
+
+def _create_updated_statuses(
+    old_status: EpisodeStatus, episode_input: ProjectEpisodeInput
+) -> tuple[EpisodeStatus, bool]:
+    new_status = old_status.copy()
+    has_changed = False
+    if isinstance(episode_input.delay_reason, str) and episode_input.delay_reason.strip():
+        new_status.delay_reason = episode_input.delay_reason
+        has_changed = True
+
+    if isinstance(episode_input.release, bool) and episode_input.release != old_status.is_released:
+        new_status.is_released = episode_input.release
+        has_changed = True
+
+    if isinstance(episode_input.roles, list):
+        for role in episode_input.roles:
+            if not isinstance(role, ProjectInputRolesGQL):
+                continue
+            for status in new_status.statuses:
+                if status.key == role.key.upper() and status.finished != role.value:
+                    status.finished = role.value
+                    has_changed = True
+                    break
+
+    return new_status, has_changed
+
+
+async def mutate_project_update_episode(
+    project_id: UUID,
+    episodes: list[ProjectEpisodeInput],
+    owner_id: str | None = None,  # None assumes admin
+):
+    if not episodes:
+        return Result(success=False, message="No episodes to update", code=ErrorCode.ProjectUpdateNoEpisode)
+    find_results = await _find_project(project_id, owner_id)
+    if isinstance(find_results, Result):
+        return find_results
+
+    project_info, _ = find_results
+
+    logger.info(f"Updating project {project_id} episodes")
+    all_statuses = project_info.statuses
+
+    changed_statuses: list[EpisodeStatus] = []
+    old_statuses: list[EpisodeStatus] = []
+    for episode in episodes:
+        index = await project_info.async_get_episode_index(episode.episode)
+        if index is None:
+            continue
+        update, status_ch = _create_updated_statuses(all_statuses[index], episode)
+        if status_ch:
+            old_statuses.append(project_info.statuses[index].copy())
+            project_info.statuses[index] = update
+            changed_statuses.append(update)
+
+    if not changed_statuses:
+        return Result(success=False, message="No episodes to update", code=ErrorCode.ProjectUpdateNoEpisode)
+
+    await project_info.save()  # type: ignore
+
+    ts_changes = TimeSeriesProjectEpisodeChanges(
+        model_id=project_id,
+        server_id=project_info.server_id,
+        old=old_statuses,
+        new=changed_statuses,
+    )
+    await TimeSeriesProjectEpisodeChanges.insert_one(ts_changes)
+    await update_searchdb(project_info)
+    return Result(success=True, message="Episodes updated", code=ErrorCode.Success)

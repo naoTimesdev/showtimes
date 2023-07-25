@@ -26,7 +26,7 @@ from showtimes.extensions.graphql.scalars import DateTime, Upload
 from showtimes.models.database import ShowProject, ShowtimesCollaborationLinkSync
 
 from .collab import ProjectCollabLinkGQL
-from .common import ImageMetadataGQL, IntegrationGQL, IntegrationInputGQL
+from .common import ImageMetadataGQL, IntegrationGQL, IntegrationInputGQL, KeyValueInputGQL
 from .enums import SearchExternalTypeGQL, SearchSourceTypeGQL
 from .partials import PartialProjectInterface, ProjectAssigneeGQL, ProjectStatusGQL, ShowPosterGQL
 
@@ -138,3 +138,12 @@ class ProjectInputGQL:
         default=gql.UNSET, description="List of roles to add to the project, if missing will use the default roles"
     )
     count: int | None = gql.field(default=gql.UNSET, description="The episode/chapter count override for the project")
+
+
+@gql.input(name="ProjectEpisodeInput", description="The project episode input information")
+class ProjectEpisodeInput:
+    episode: int = gql.field(description="The episode number")
+    # roles will be a dynamic input, any data found in the database will be updated to the value provided.
+    roles: list[KeyValueInputGQL[bool]] | None = gql.field(default=gql.UNSET, description="The roles for the episode")
+    release: bool | None = gql.field(default=gql.UNSET, description="The release status of the episode")
+    delay_reason: str | None = gql.field(default=gql.UNSET, description="The delay reason of the episode")

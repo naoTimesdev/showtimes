@@ -16,7 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import Type
+from typing import Generic, Type, TypeVar
 
 import strawberry as gql
 
@@ -27,7 +27,9 @@ __all__ = (
     "IntegrationGQL",
     "IntegrationInputGQL",
     "ImageMetadataGQL",
+    "KeyValueInputGQL",
 )
+KVT = TypeVar("KVT")
 
 
 @gql.type(name="Integration", description="The integration information")
@@ -66,3 +68,9 @@ class ImageMetadataGQL:
             path=avatar.as_url(),
             type=avatar.type,
         )
+
+
+@gql.input(name="KeyValueInput", description="A key-value pair")
+class KeyValueInputGQL(Generic[KVT]):
+    key: str = gql.field(description="The key")
+    value: KVT = gql.field(description="The value")

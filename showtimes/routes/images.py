@@ -17,6 +17,7 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from mimetypes import guess_type
+from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.datastructures import Default
@@ -73,15 +74,16 @@ async def images_routing_no_parent_get(type: str, id: str, filename: str):
 @router.get("/{type}/{parent}/{id}/{filename}", description="Get image from storage with parent ID and key ID")
 async def images_routing_with_parent_get(type: str, parent: str, id: str, filename: str):
     storage = get_storage()
+    try:
+        streamer = storage.stream_download(base_key=parent, parent_id=id, filename=filename, type=type)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "Image not found") from exc
 
-    async def iterator_stream():
-        try:
-            async for chunk in storage.stream_download(base_key=parent, parent_id=id, filename=filename, type=type):
-                yield chunk
-        except FileNotFoundError as exc:
-            raise HTTPException(404, "Image not found") from exc
+    async def iterator_stream(stream_input: AsyncGenerator[bytes, None]):
+        async for chunk in stream_input:
+            yield chunk
 
     mime_type, _ = guess_type(filename)
     mime_type = mime_type or _modern_filetype_guess(filename)
 
-    return StreamingResponse(iterator_stream(), media_type=mime_type)
+    return StreamingResponse(iterator_stream(streamer), media_type=mime_type)

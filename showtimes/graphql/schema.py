@@ -16,7 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import Type, TypedDict, Union, cast
+from typing import AsyncGenerator, Type, TypedDict, Union, cast
 from uuid import UUID
 
 import strawberry as gql
@@ -25,19 +25,24 @@ from strawberry.file_uploads import Upload
 from strawberry.types import Info
 
 from showtimes.controllers.sessions.handler import is_master_session
+from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
 from showtimes.graphql.cursor import Cursor
 from showtimes.graphql.models.pagination import Connection, SortDirection
-from showtimes.graphql.models.projects import ProjectGQL, ProjectInputGQL
+from showtimes.graphql.models.projects import ProjectEpisodeInput, ProjectGQL, ProjectInputGQL
 from showtimes.graphql.models.servers import ServerGQL, ServerInputGQL
+from showtimes.graphql.subscriptions.showtimes import (
+    ProjectEpisodeUpdateSubs,
+    subs_showtimes_project_episode_updated,
+)
 from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, UserType
 from showtimes.models.session import ServerSessionInfo
 from showtimes.utils import make_uuid
 
 from .models import ErrorCode, Result, UserGQL, UserSessionGQL, UserTemporaryGQL
-from .mutations.projects import mutate_project_add, mutate_project_delete
+from .mutations.projects import mutate_project_add, mutate_project_delete, mutate_project_update_episode
 from .mutations.servers import mutate_server_add, mutate_server_update
 from .mutations.users import (
     mutate_login_user,
@@ -159,7 +164,7 @@ class Query:
         srv_id = None
         if info.context.user.active is not None:
             srv_id = info.context.user.active.server_id
-        if id is not None:
+        if isinstance(server_id, UUID):
             srv_id = str(server_id)
 
         if srv_id is None:
@@ -170,8 +175,8 @@ class Query:
             )
 
         success, srv_info, err_code = await resolve_server_project_fetch(
-            str(id),
-            str(srv_id),
+            srv_id=str(srv_id),
+            project_id=str(id),
         )
         if not success and isinstance(srv_info, str):
             return Result(success=False, message=srv_info, code=err_code)
@@ -444,10 +449,8 @@ class Mutation:
             return response
         return ProjectGQL.from_db(response)
 
-    @gql.mutation(description="Add a new project")
-    async def delete_project(
-        self, info: Info[SessionQLContext, None], id: UUID, server_id: UUID | None = None
-    ) -> Result:
+    @gql.mutation(description="Delete a project")
+    async def delete_project(self, info: Info[SessionQLContext, None], id: UUID) -> Result:
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
 
@@ -457,10 +460,57 @@ class Mutation:
         response = await mutate_project_delete(id, owner_id)
         return response
 
+    @gql.mutation(description="Update a project")
+    async def update_project(self, info: Info[SessionQLContext, None], id: UUID) -> Result:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+        # response = await mutate_project_delete(id, owner_id)
+        return Result(success=False, message="Not implemented", code=ErrorCode.NotImplemented)
+
+    @gql.mutation(description="Update a project episode status")
+    async def update_project_episode(
+        self,
+        info: Info[SessionQLContext, None],
+        id: UUID,
+        episodes: list[ProjectEpisodeInput],
+    ) -> Result:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+
+        return await mutate_project_update_episode(project_id=id, episodes=episodes, owner_id=owner_id)
+
 
 @gql.type
 class Subscription:
-    ...
+    @gql.subscription(description="Subscribe to project episode update")
+    async def project_episode_update(
+        self,
+        info: Info[SessionQLContext, None],
+        project_id: UUID | None = gql.UNSET,
+        server_id: UUID | None = gql.UNSET,
+    ) -> AsyncGenerator[ProjectEpisodeUpdateSubs, None]:
+        if info.context.user is None:
+            raise ShowtimesException(
+                401,
+                "You are not logged in",
+            )
+
+        if not isinstance(project_id, UUID) and not isinstance(server_id, UUID):
+            raise ShowtimesException(
+                400,
+                "You must provide either projectId or serverId",
+            )
+
+        async for payload in subs_showtimes_project_episode_updated(server_id=server_id, project_id=project_id):
+            yield payload
 
 
 def _has_any_function_or_attr(obj: type | object) -> bool:

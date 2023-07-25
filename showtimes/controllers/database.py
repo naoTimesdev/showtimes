@@ -25,6 +25,8 @@ from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
 
+from showtimes.models.timeseries import TimeSeriesBase, TimeSeriesProjectEpisodeChanges
+
 if TYPE_CHECKING:
     from motor.core import AgnosticClient, AgnosticDatabase
 
@@ -138,5 +140,7 @@ class ShowtimesDatabase:
                 ShowtimesTemporaryUser,
                 ShowtimesCollaboration,
                 ShowtimesCollaborationLinkSync,
+                TimeSeriesBase,
+                TimeSeriesProjectEpisodeChanges,
             ],  # type: ignore
         )

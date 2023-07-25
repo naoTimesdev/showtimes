@@ -31,7 +31,7 @@ from showtimes.models.database import (
     ShowtimesUserGroup,
 )
 
-from .common import ImageMetadataGQL, IntegrationInputGQL
+from .common import ImageMetadataGQL, IntegrationGQL, IntegrationInputGQL
 from .partials import PartialServerInterface
 from .projects import ProjectGQL
 from .users import UserGQL, UserTemporaryGQL
@@ -50,6 +50,7 @@ class ServerGQL(PartialServerInterface):
             id=server.server_id,
             name=server.name,
             avatar=ImageMetadataGQL.from_db(server.avatar) if server.avatar else None,
+            integrations=[IntegrationGQL.from_db(integration) for integration in server.integrations],
             server_id=str(server.id),
             project_links=[str(i.ref.id) for i in server.projects],
             owner_links=[str(i.ref.id) for i in server.owners],

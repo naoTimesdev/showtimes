@@ -16,6 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
+import asyncio
 from enum import Enum
 from typing import Optional, TypeVar
 from uuid import UUID
@@ -248,7 +249,7 @@ class ShowExternalAnilist(ShowExternalData, ShowExternalStart):
     ani_id: str
     mal_id: Optional[str] = None  # for other integration
 
-    @before_event(Insert, Replace, Update, SaveChanges)
+    @before_event(*AllEvent)
     def force_type(self):
         # DO NOT ALLOW THIS TO BE CHANGED.
         self.type = ShowExternalType.ANILIST
@@ -257,7 +258,7 @@ class ShowExternalAnilist(ShowExternalData, ShowExternalStart):
 class ShowExternalTMDB(ShowExternalData, ShowExternalStart):
     tmdb_id: str
 
-    @before_event(Insert, Replace, Update, SaveChanges)
+    @before_event(*AllEvent)
     def force_type(self):
         # DO NOT ALLOW THIS TO BE CHANGED.
         self.type = ShowExternalType.TMDB
@@ -299,6 +300,10 @@ class ShowProject(Document):
     def coerce_penulum(self):
         _coerce_to_pendulum(self)
 
+    @before_event(*AllEvent)
+    def _update_time(self):
+        self.updated_at = pendulum_utc()
+
     def _save_state(self):
         _coerce_to_pendulum(self)
         super()._save_state()
@@ -306,6 +311,15 @@ class ShowProject(Document):
     class Settings:
         name = "ShowtimesProjects"
         use_state_management = True
+
+    def get_episode_index(self, episode: int) -> int | None:
+        for idx, status in enumerate(self.statuses):
+            if status.episode == episode:
+                return idx
+
+    async def async_get_episode_index(self, episode: int) -> int | None:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_episode_index, episode)
 
 
 class UserType(str, Enum):

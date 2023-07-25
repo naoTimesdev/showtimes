@@ -32,7 +32,7 @@ from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.security import encrypt_password
 from showtimes.controllers.storages import get_s3_storage, get_storage, init_s3_storage
 from showtimes.models import database as newdb
-from showtimes.models.searchdb import ProjectSearch, SearchIntegrationData, ServerSearch, UserSearch
+from showtimes.models.searchdb import ProjectSearch, ServerSearch, UserSearch
 from showtimes.tooling import get_env_config, setup_logger
 from showtimes.utils import make_uuid, try_int
 
@@ -852,55 +852,18 @@ class Forward:
         logger.info("Creating Meilisearch index...")
         search_srv_docs: list[ServerSearch] = []
         for server in ADDED_SHOWTIMES_SERVERS.values():
-            project_ids = [str(project.ref.id) for project in server.projects]
-            integrations = [
-                SearchIntegrationData(integration.id, integration.type) for integration in server.integrations
-            ]
-            server_search = ServerSearch(
-                id=str(server.server_id), name=server.name, projects=project_ids, integrations=integrations
-            )
-            search_srv_docs.append(server_search)
+            search_srv_docs.append(ServerSearch.from_db(server))
         logger.info(f"  Adding {len(search_srv_docs)} documents to Server Index...")
         await meili_client.add_documents(search_srv_docs)  # type: ignore
         search_proj_docs: list[ProjectSearch] = []
         for projects in ADDED_SHOWTIMES_PROJECTS.values():
             for project in projects.values():
-                integrations = [
-                    SearchIntegrationData(integration.id, integration.type) for integration in project.integrations
-                ]
-                project_search = ProjectSearch(
-                    id=str(project.show_id),
-                    title=project.title,
-                    poster_url=project.poster.image.as_url(),
-                    created_at=int(project.created_at.timestamp()),
-                    updated_at=int(project.updated_at.timestamp()),
-                    server_id=str(project.server_id),
-                    integrations=integrations,
-                )
-                search_proj_docs.append(project_search)
+                search_proj_docs.append(ProjectSearch.from_db(project))
         logger.info(f"  Adding {len(search_proj_docs)} documents to Project Index...")
         await meili_client.add_documents(search_proj_docs)  # type: ignore
         search_user_docs: list[UserSearch] = []
         for user in ADDED_SHOWTIMES_USERS.values():
-            integrations = [
-                SearchIntegrationData(integration.id, integration.type) for integration in user.integrations
-            ]
-            utype = "tempuser"
-            avatar_url = None
-            if isinstance(user, newdb.ShowtimesUser):
-                utype = "user"
-                if user.avatar is not None:
-                    avatar_url = user.avatar.as_url()
-            user_search = UserSearch(
-                id=str(user.user_id),
-                name=getattr(user, "name", None),
-                username=user.username,
-                object_id=str(user.id),
-                type=utype,
-                integrations=integrations,
-                avatar_url=avatar_url,
-            )
-            search_user_docs.append(user_search)
+            search_user_docs.append(UserSearch.from_db(user))
         logger.info(f"  Adding {len(search_user_docs)} documents to User Index...")
         await meili_client.add_documents(search_user_docs)  # type: ignore
 

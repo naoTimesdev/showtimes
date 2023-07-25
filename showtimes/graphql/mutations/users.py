@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Literal, Tuple, TypeVar, Union, cast
 from uuid import UUID
 
+from showtimes.controllers.searcher import get_searcher
 from showtimes.controllers.security import encrypt_password, verify_password
 from showtimes.graphql.models import UserGQL
 from showtimes.graphql.models.fallback import ErrorCode
@@ -30,6 +31,7 @@ from showtimes.models.database import (
     ShowtimesUserGroup,
     UserType,
 )
+from showtimes.models.searchdb import UserSearch
 
 ResultT = TypeVar("ResultT")
 ResultOrT = Union[Tuple[Literal[False], str, str], Tuple[Literal[True], ResultT, None]]
@@ -43,6 +45,14 @@ __all__ = (
     "mutate_migrate_user_approve",
     "mutate_reset_password",
 )
+
+
+async def update_searchdb(user: ShowtimesUser, *, insert: bool = False) -> None:
+    searcher = get_searcher()
+    if insert:
+        await searcher.add_document(UserSearch.from_db(user))
+    else:
+        await searcher.update_document(UserSearch.from_db(user))
 
 
 async def mutate_login_user(
@@ -148,8 +158,12 @@ async def mutate_register_user_approve(
         user_id=user.user_id,
     )
 
-    await new_user.save()  # type: ignore
+    _new_user = await ShowtimesUser.insert_one(new_user)
+    if _new_user is None:
+        return False, "Failed to register user", ErrorCode.ServerError
     await user.delete()  # type: ignore
+
+    await update_searchdb(new_user, insert=True)
 
     return True, UserGQL.from_db(new_user), None
 
@@ -177,7 +191,11 @@ async def mutate_migrate_user_approve(
         user_id=user.user_id,
     )
     await user.delete()  # type: ignore
-    await new_user.save()  # type: ignore
+    _new_user = await ShowtimesUser.insert_one(new_user)
+    if not _new_user:
+        return False, "Failed to migrate user", ErrorCode.ServerError
+
+    await update_searchdb(new_user)
 
     return True, UserGQL.from_db(new_user), None
 

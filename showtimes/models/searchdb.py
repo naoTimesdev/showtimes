@@ -22,6 +22,8 @@ from typing import Any, ClassVar, Protocol, Type, TypeVar
 
 import orjson
 
+from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, ShowtimesUserGroup
+
 __all__ = (
     "SchemaAble",
     "ServerSearch",
@@ -130,6 +132,17 @@ class ServerSearch(SchemaAble):
     class Config:
         index = "servers"
 
+    @classmethod
+    def from_db(cls: Type[ServerSearch], server: ShowtimesServer):
+        project_ids = [str(project.ref.id) for project in server.projects]
+        integrations = [SearchIntegrationData(integration.id, integration.type) for integration in server.integrations]
+        return cls(
+            id=str(server.server_id),
+            name=server.name,
+            projects=project_ids,
+            integrations=integrations,
+        )
+
 
 @dataclass
 class ProjectSearch(SchemaAble):
@@ -144,6 +157,19 @@ class ProjectSearch(SchemaAble):
     class Config:
         index = "projects"
 
+    @classmethod
+    def from_db(cls: Type[ProjectSearch], project: ShowProject):
+        integrations = [SearchIntegrationData(integration.id, integration.type) for integration in project.integrations]
+        return cls(
+            id=str(project.show_id),
+            title=project.title,
+            poster_url=project.poster.image.as_url(),
+            created_at=int(project.created_at.timestamp()),
+            updated_at=int(project.updated_at.timestamp()),
+            server_id=str(project.server_id),
+            integrations=integrations,
+        )
+
 
 @dataclass
 class UserSearch(SchemaAble):
@@ -157,3 +183,22 @@ class UserSearch(SchemaAble):
 
     class Config:
         index = "users"
+
+    @classmethod
+    def from_db(cls: Type[UserSearch], user: ShowtimesUserGroup):
+        integrations = [SearchIntegrationData(integration.id, integration.type) for integration in user.integrations]
+        utype = "tempuser"
+        avatar_url = None
+        if isinstance(user, ShowtimesUser):
+            utype = "user"
+            if user.avatar is not None:
+                avatar_url = user.avatar.as_url()
+        return cls(
+            id=str(user.user_id),
+            name=getattr(user, "name", None),
+            username=user.username,
+            object_id=str(user.id),
+            type=utype,
+            integrations=integrations,
+            avatar_url=avatar_url,
+        )

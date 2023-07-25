@@ -7,5 +7,6 @@ The REST API of Showtimes Backend Project.
 :license: AGPL-3.0, see LICENSE for more details.
 """
 
+from .images import *
 from .oauth2 import *
 from .server import *

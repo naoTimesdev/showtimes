@@ -22,7 +22,7 @@ from mimetypes import guess_type
 from pathlib import Path
 from typing import (
     IO,
-    AsyncIterator,
+    AsyncGenerator,
     Awaitable,
     Optional,
     Protocol,
@@ -84,6 +84,32 @@ class StreamableData(Protocol):
         ...
 
     def seek(self, offset: int, whence: int = ..., /) -> int:
+        ...
+
+
+class StreamableDataAsync(Protocol):
+    """
+    A simple protocol typing for readable data.
+
+    Mainly contains:
+    - `.read()` method
+    - `.seek()` method
+
+    Both can be async or not.
+    """
+
+    async def read(self, size: int = -1) -> bytes:
+        ...
+
+    @overload
+    async def seek(self, offset: int, /) -> int:
+        ...
+
+    @overload
+    async def seek(self, offset: int, whence: int, /) -> int:
+        ...
+
+    async def seek(self, offset: int, whence: int = ..., /) -> int:
         ...
 
 
@@ -229,7 +255,7 @@ class Storage(Protocol):
         parent_id: str,
         filename: str,
         type: str = ...,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         """
         (Async) Download a file, using data stream.
 
@@ -250,7 +276,7 @@ class Storage(Protocol):
 
         Returns
         -------
-        AsyncIterator[bytes]
+        AsyncGenerator[bytes, None]
             The file data stream, can be used in `async for` loop.
         """
         ...
@@ -369,7 +395,9 @@ class LocalStorage(Storage):
             await f.write(read)
         return await self.stat_file(base_key, parent_id, filename, type)
 
-    async def stream_download(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
+    async def stream_download(
+        self, base_key: str, parent_id: str, filename: str, type: str = "images"
+    ) -> AsyncGenerator[bytes, None]:
         await self.start()
         path = self._root / type / base_key / parent_id.replace("-", "") / filename
         async with path.open("rb") as f:
@@ -377,7 +405,7 @@ class LocalStorage(Storage):
                 chunk = await f.read(1024)
                 if not chunk:
                     break
-                yield chunk
+                yield cast(bytes, chunk)
 
     async def download(self, base_key: str, parent_id: str, filename: str, type: str = "images"):
         await self.start()
@@ -495,7 +523,7 @@ class S3Storage(Storage):
 
     async def stream_download(
         self, base_key: str, parent_id: str, filename: str, type: str = "images"
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         await self.start()
         path = f"{type}/{base_key}/{parent_id.replace('-', '')}/{filename}"
         if self._client is None:

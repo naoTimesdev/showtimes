@@ -99,8 +99,11 @@ class PubSubHandler:
 
         self._message_handler: dict[str, list[MessageHandler]] = {}
         self._lock_unsub = asyncio.Lock()
+        self._lock_close = False
 
         self._running_tasks: dict[str, asyncio.Task] = {}
+
+        self._message_queue: dict[str, list[Any]] = {}
 
     async def unsubscribe(self, topic: str, identifier: str):
         async with self._lock_unsub:
@@ -117,6 +120,8 @@ class PubSubHandler:
                 self._message_handler[topic].pop(idx_del)
 
     def subscribe(self, topic: str) -> MessageHandler:
+        if self._lock_close:
+            raise RuntimeError("PubSub is closing")
         if topic not in self._message_handler:
             self._message_handler[topic] = []
 
@@ -124,9 +129,15 @@ class PubSubHandler:
         logger.debug(f"New subscriber {identifier} for {topic}")
         handler = MessageHandler(str(identifier), topic, handler=self)
         self._message_handler[topic].append(handler)
+        topic_queue = self._message_queue.get(topic)
+        if topic_queue is not None:
+            for payload in topic_queue:
+                self._publish_message(topic, [handler], payload)
         return handler
 
     async def close(self):
+        self._lock_close = True
+        self._message_queue.clear()
         for topic in self._message_handler.keys():
             for handler in self._message_handler[topic]:
                 await handler.close(skip_handler=True)
@@ -146,10 +157,7 @@ class PubSubHandler:
         except KeyError:
             pass
 
-    def publish(self, topic: str, payload: Any):
-        topic_handler = self._message_handler.get(topic)
-        if topic_handler is None:
-            return
+    def _publish_message(self, topic: str, topic_handler: list[MessageHandler], payload: Any):
         ts = int(datetime.utcnow().timestamp())
         for handler in topic_handler:
             payload_name = f"shpubsubv2:{topic}:{handler.identifier}:{ts}"
@@ -157,6 +165,16 @@ class PubSubHandler:
             task = asyncio.create_task(handler.publish(payload), name=payload_name)
             task.add_done_callback(self._task_cb_pub)
             self._running_tasks[payload_name] = task
+
+    def publish(self, topic: str, payload: Any):
+        if self._lock_close:
+            return
+        topic_handler = self._message_handler.get(topic)
+        if topic_handler is None:
+            # no subscriber, just put it in the queue
+            self._message_queue.setdefault(topic, []).append(payload)
+            return
+        self._publish_message(topic, topic_handler, payload)
 
 
 _PUBSUB = PubSubHandler()

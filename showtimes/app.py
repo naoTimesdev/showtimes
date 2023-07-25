@@ -31,6 +31,7 @@ from strawberry.exceptions import StrawberryGraphQLError
 from showtimes.controllers.anilist import get_anilist_client, init_anilist_client
 from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
+from showtimes.controllers.pubsub import get_pubsub
 from showtimes.controllers.redisdb import get_redis, init_redis_client
 from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.sessions.errors import SessionError
@@ -157,6 +158,11 @@ async def app_on_startup(run_production: bool = True):
 async def app_on_shutdown():
     logger = get_root_logger()
     logger.info("Shutting down backend...")
+
+    pubsub = get_pubsub()
+    logger.info("Closing PubSub instances...")
+    await pubsub.close()
+    logger.info("Closed PubSub instances!")
 
     try:
         redis_client = get_redis()

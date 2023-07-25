@@ -47,7 +47,7 @@ class ImageMetadata(BaseModel):
     """The format of the image"""
 
     def as_url(self):
-        return f"/{self.type}/{self.key}/{self.parent}/{self.filename}.{self.format}"
+        return f"/{self.type}/{self.key}/{self.parent}/{self.filename}"
 
 
 class DefaultIntegrationType:
@@ -320,6 +320,9 @@ class ShowtimesUserGroup(Document):
     cls_id: _UserDocType = Field(default=_UserDocType.UNKNOWN)
     """The class ID of the user, used for inheritance."""
     user_id: UUID = Field(default_factory=make_uuid)
+    """The ID of the user."""
+    integrations: list[IntegrationId] = Field(default_factory=list)
+    """The integrations of this user."""
 
     class Settings:
         name = "ShowtimesUsers"

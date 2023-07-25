@@ -26,8 +26,6 @@ from uuid import UUID
 import aiohttp
 import pendulum
 import strawberry as gql
-from beanie.operators import And as OpAnd
-from beanie.operators import In as OpIn
 from bson import ObjectId
 
 from showtimes.controllers.anilist import (
@@ -76,7 +74,6 @@ from showtimes.models.database import (
     ShowExternalEpisode,
     ShowPoster,
     ShowProject,
-    ShowtimesCollaborationLinkSync,
     ShowtimesServer,
     to_link,
 )
@@ -84,6 +81,8 @@ from showtimes.models.searchdb import ProjectSearch, ServerSearch
 from showtimes.models.timeseries import TimeSeriesProjectEpisodeChanges
 from showtimes.tooling import get_logger
 from showtimes.utils import complex_walk, make_uuid
+
+from .common import common_mutate_project_delete
 
 __all__ = (
     "mutate_project_add",
@@ -332,12 +331,6 @@ async def update_server_searchdb(server: ShowtimesServer) -> None:
     await searcher.update_document(ServerSearch.from_db(server))
 
 
-async def delete_searchdb(project_id: UUID) -> None:
-    logger.debug(f"Deleting Project Search Index for project {project_id}")
-    searcher = get_searcher()
-    await searcher.delete_document(ProjectSearch.Config.index, str(project_id))
-
-
 def _process_input_integration(integrations: list[IntegrationInputGQL] | None):
     if integrations is None:
         return []
@@ -378,71 +371,19 @@ async def mutate_project_delete(
     project_id: UUID,
     owner_id: str | None = None,  # None assumes admin
 ) -> Result:
-    stor = get_storage()
     find_results = await _find_project(project_id, owner_id)
     if isinstance(find_results, Result):
         return find_results
 
     project_info, server_info = find_results
 
-    logger.info(f"Deleting project {project_id} poster")
-    if project_info.poster.image:
-        # Check if type is invalids
-        if project_info.poster.image.type != "invalids":
-            await stor.delete(
-                base_key=project_info.poster.image.key,
-                parent_id=project_info.poster.image.parent,
-                filename=project_info.poster.image.filename,
-                type=project_info.poster.image.type,
-            )
-
-    collected_dbref: list[ObjectId] = []
-    for assignee in project_info.assignments:
-        if assignee.actor is not None:
-            collected_dbref.append(assignee.actor.to_ref().id)
-
-    logger.info(f"Deleting project {project_id} actors")
-    await RoleActor.find(OpIn(RoleActor.id, collected_dbref)).delete_many()
-
-    logger.info(f"Deleting project {project_id} from searchdb")
-    await delete_searchdb(project_id)
-
-    logger.info(f"Deleting project {project_id}")
-    object_link = to_link(project_info)
-    await project_info.delete()  # type: ignore
-
-    # Unlink from server
-    projects = [project for project in server_info.projects if project.ref.id != object_link.ref.id]
-    server_info.projects = projects
-    await server_info.save()  # type: ignore
+    result = await common_mutate_project_delete(project_info, server_info)
+    if not result.success:
+        return result
 
     logger.info(f"Updating server {server_info.server_id} searchdb")
     await update_server_searchdb(server_info)
-
-    # Unlink from collaboration/confirmation
-    logger.info(f"Deleting project {project_id} from collaboration")
-    collab_sync = await ShowtimesCollaborationLinkSync.find_one(
-        OpAnd(
-            OpIn(ShowtimesCollaborationLinkSync.projects, [project_id]),
-            OpIn(ShowtimesCollaborationLinkSync.servers, [server_info.server_id]),
-        ),
-    )
-
-    if collab_sync is not None:
-        # Delete the UUID
-        collab_sync.projects.remove(project_id)
-        collab_sync.servers.remove(server_info.server_id)
-        # Check if only single or empty
-        if len(collab_sync.projects) <= 1 or len(collab_sync.servers) <= 1:
-            # Delete link
-            logger.info(f"Collaboration link {collab_sync.id} is no longer needed, deleting...")
-            await collab_sync.delete()  # type: ignore
-        else:
-            await collab_sync.save()  # type: ignore
-
-    # TODO: Delete confirmation
-
-    return Result(success=True, message="Project deleted", code=ErrorCode.Success)
+    return result
 
 
 async def mutate_project_add(

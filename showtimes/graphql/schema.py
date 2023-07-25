@@ -28,15 +28,12 @@ from showtimes.controllers.sessions.handler import is_master_session
 from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
+from showtimes.extensions.graphql.scalars import UNIXTimestamp
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
 from showtimes.graphql.cursor import Cursor
 from showtimes.graphql.models.pagination import Connection, SortDirection
 from showtimes.graphql.models.projects import ProjectEpisodeInput, ProjectGQL, ProjectInputGQL
 from showtimes.graphql.models.servers import ServerGQL, ServerInputGQL
-from showtimes.graphql.subscriptions.showtimes import (
-    ProjectEpisodeUpdateSubs,
-    subs_showtimes_project_episode_updated,
-)
 from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, UserType
 from showtimes.models.session import ServerSessionInfo
 from showtimes.utils import make_uuid
@@ -48,7 +45,7 @@ from .mutations.projects import (
     mutate_project_update,
     mutate_project_update_episode,
 )
-from .mutations.servers import mutate_server_add, mutate_server_update
+from .mutations.servers import mutate_server_add, mutate_server_delete, mutate_server_update
 from .mutations.users import (
     mutate_login_user,
     mutate_migrate_user,
@@ -64,6 +61,13 @@ from .queries.showtimes import (
     resolve_server_fetch,
     resolve_server_project_fetch,
     resolve_servers_fetch_paginated,
+)
+from .subscriptions.showtimes import (
+    ProjectEpisodeUpdateSubs,
+    SubsResponse,
+    subs_showtimes_project_delete,
+    subs_showtimes_project_episode_updated,
+    subs_showtimes_server_delete,
 )
 
 __all__ = ("make_schema",)
@@ -418,12 +422,27 @@ class Mutation:
                 code=ErrorCode.ServerUnselect,
             )
 
-        success, srv_info, err_code = await mutate_server_update(srv_id, data)
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+
+        success, srv_info, err_code = await mutate_server_update(srv_id, data, owner_id)
         if not success and isinstance(srv_info, str):
             return Result(success=False, message=srv_info, code=err_code)
         srv_info = cast(ShowtimesServer, srv_info)
 
         return ServerGQL.from_db(srv_info)
+
+    @gql.mutation(description="Delete a server")
+    async def delete_server(self, info: Info[SessionQLContext, None], id: UUID) -> Result:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+        response = await mutate_server_delete(id, owner_id)
+        return response
 
     # Project mutation
     @gql.mutation(description="Add a new project")
@@ -501,11 +520,12 @@ class Mutation:
 @gql.type
 class Subscription:
     @gql.subscription(description="Subscribe to project episode update")
-    async def project_episode_update(
+    async def project_episode_updates(
         self,
         info: Info[SessionQLContext, None],
         project_id: UUID | None = gql.UNSET,
         server_id: UUID | None = gql.UNSET,
+        start_from: UNIXTimestamp | None = gql.UNSET,
     ) -> AsyncGenerator[ProjectEpisodeUpdateSubs, None]:
         if info.context.user is None:
             raise ShowtimesException(
@@ -519,7 +539,53 @@ class Subscription:
                 "You must provide either projectId or serverId",
             )
 
-        async for payload in subs_showtimes_project_episode_updated(server_id=server_id, project_id=project_id):
+        async for payload in subs_showtimes_project_episode_updated(
+            server_id=server_id, project_id=project_id, start_from=start_from
+        ):
+            yield payload
+
+    @gql.subscription(description="Subscribe to server deletion")
+    async def server_deletion(
+        self,
+        info: Info[SessionQLContext, None],
+        server_id: UUID | None = gql.UNSET,
+    ) -> AsyncGenerator[SubsResponse, None]:
+        if info.context.user is None:
+            raise ShowtimesException(
+                401,
+                "You are not logged in",
+            )
+
+        if not isinstance(server_id, UUID) and not info.context.user.privilege != UserType.ADMIN:
+            raise ShowtimesException(
+                400,
+                "You must provide either serverId or be an admin to watch every server deletion",
+            )
+
+        async for payload in subs_showtimes_server_delete(server_id=server_id):
+            yield payload
+
+    @gql.subscription(description="Subscribe to server deletion")
+    async def project_deletion(
+        self,
+        info: Info[SessionQLContext, None],
+        server_id: UUID | None = gql.UNSET,
+        project_id: UUID | None = gql.UNSET,
+    ) -> AsyncGenerator[SubsResponse, None]:
+        if info.context.user is None:
+            raise ShowtimesException(
+                401,
+                "You are not logged in",
+            )
+
+        model_id = server_id or project_id
+        if not isinstance(model_id, UUID) and not info.context.user.privilege != UserType.ADMIN:
+            raise ShowtimesException(
+                400,
+                "You must provide either serverId or projectId or be an admin to watch every server deletion",
+            )
+
+        async for payload in subs_showtimes_project_delete(model_id=model_id):
             yield payload
 
 

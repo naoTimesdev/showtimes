@@ -29,11 +29,15 @@ from showtimes.models.database import EpisodeStatus
 __all__ = (
     "PubSubType",
     "TimeSeriesProjectEpisodeChanges",
+    "TimeSeriesServerDelete",
+    "TimeSeriesProjectDelete",
 )
 
 
 class PubSubType(str, Enum):
-    EPISODE_CHANGE = "episode:changes:"
+    EPISODE_CHANGE = "project:episode:changes:"
+    SERVER_DELETE = "server:delete:"
+    PROJECT_DELETE = "project:delete:"
 
     def make(self, id: UUID | str) -> str:
         return f"{self.value}{id}"
@@ -70,3 +74,25 @@ class TimeSeriesProjectEpisodeChanges(TimeSeriesBase):
         # Two publish
         pubsub.publish(PubSubType.EPISODE_CHANGE.make(self.model_id), self)
         pubsub.publish(PubSubType.EPISODE_CHANGE.make(self.server_id), self)
+
+
+class TimeSeriesServerDelete(TimeSeriesBase):
+    @after_event(Insert, Save, SaveChanges)
+    def publish_changes(self):
+        pubsub = get_pubsub()
+        # Two publish
+        pubsub.publish(PubSubType.SERVER_DELETE.make(self.model_id), self)
+        pubsub.publish(PubSubType.SERVER_DELETE.make("ALL"), self)
+
+
+class TimeSeriesProjectDelete(TimeSeriesBase):
+    server_id: UUID
+    """The server ID"""
+
+    @after_event(Insert, Save, SaveChanges)
+    def publish_changes(self):
+        pubsub = get_pubsub()
+        # Two publish
+        pubsub.publish(PubSubType.PROJECT_DELETE.make(self.model_id), self)
+        pubsub.publish(PubSubType.PROJECT_DELETE.make(id=self.server_id), self)
+        pubsub.publish(PubSubType.PROJECT_DELETE.make("ALL"), self)

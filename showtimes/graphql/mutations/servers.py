@@ -20,20 +20,32 @@ from typing import Literal, TypeAlias, TypeVar
 from uuid import UUID
 
 import strawberry as gql
+from beanie.operators import In as OpIn
+from bson import ObjectId
 
 from showtimes.controllers.searcher import get_searcher
 from showtimes.extensions.graphql.files import delete_image_upload, handle_image_upload
 from showtimes.graphql.models.common import IntegrationInputGQL
 from showtimes.graphql.models.enums import IntegrationInputActionGQL
-from showtimes.graphql.models.fallback import ErrorCode
+from showtimes.graphql.models.fallback import ErrorCode, Result
 from showtimes.graphql.models.servers import ServerInputGQL
-from showtimes.models.database import ImageMetadata, IntegrationId, ShowtimesServer, ShowtimesUser, to_link
+from showtimes.graphql.mutations.common import common_mutate_project_delete
+from showtimes.models.database import (
+    ImageMetadata,
+    IntegrationId,
+    ShowProject,
+    ShowtimesServer,
+    ShowtimesUser,
+    to_link,
+)
 from showtimes.models.searchdb import ServerSearch
+from showtimes.models.timeseries import TimeSeriesServerDelete
 from showtimes.tooling import get_logger
 
 __all__ = (
-    "mutate_server_update",
     "mutate_server_add",
+    "mutate_server_update",
+    "mutate_server_delete",
 )
 ResultT = TypeVar("ResultT")
 ResultOrT: TypeAlias = tuple[Literal[False], str, str] | tuple[Literal[True], ResultT, None]
@@ -46,9 +58,16 @@ async def update_searchdb(server: ShowtimesServer) -> None:
     await searcher.update_document(ServerSearch.from_db(server))
 
 
+async def delete_searchdb(server: ShowtimesServer) -> None:
+    logger.debug(f"Deleting Server Search Index for server {server.server_id}")
+    searcher = get_searcher()
+    await searcher.delete_document(ServerSearch.Config.index, str(server.server_id))
+
+
 async def mutate_server_update(
     id: UUID,
     input_data: ServerInputGQL,
+    owner_id: str | None = None,
 ) -> ResultOrT[ShowtimesServer]:
     logger.info(f"Updating server {id}")
     server_info = await ShowtimesServer.find_one(ShowtimesServer.server_id == id)
@@ -56,6 +75,11 @@ async def mutate_server_update(
     if not server_info:
         logger.warning(f"Server {id} not found")
         return False, "Server not found", ErrorCode.ServerNotFound
+
+    owners = [owner.ref.id for owner in server_info.owners]
+    if owner_id and ObjectId(owner_id) not in owners:
+        logger.warning(f"Owner {owner_id} not found")
+        return False, "You are not one of the owner of this server", ErrorCode.ServerNotAllowed
 
     save_changes = False
     if isinstance(input_data.name, str) and input_data.name.strip() != server_info.name:
@@ -184,3 +208,39 @@ async def mutate_server_add(
         return False, "Server creation failed", ErrorCode.ServerError
     await update_searchdb(server_info)
     return True, _server_info, None
+
+
+async def mutate_server_delete(
+    server_id: UUID,
+    owner_id: str | None = None,
+) -> Result:
+    logger.info(f"Updating server {server_id}")
+    server_info = await ShowtimesServer.find_one(ShowtimesServer.server_id == server_id)
+
+    if not server_info:
+        logger.warning(f"Server {server_id} not found")
+        return Result(success=False, message="Server not found", code=ErrorCode.ServerNotFound)
+
+    owners = [owner.ref.id for owner in server_info.owners]
+    if owner_id and ObjectId(owner_id) not in owners:
+        logger.warning(f"Owner {owner_id} not found")
+        return Result(
+            success=False, message="You are not one of the owner of this server", code=ErrorCode.ServerNotAllowed
+        )
+
+    logger.info(f"Preparing for server deletion {server_id}...")
+    project_ids = [project.ref.id for project in server_info.projects]
+    async for project_info in ShowProject.find(OpIn(ShowProject.id, project_ids)):
+        logger.info(f"Deleting project {project_info.show_id} from {server_id}...")
+        await common_mutate_project_delete(project_info, server_info, skip_server_update=True)
+
+    if server_info.avatar and server_info.avatar.type != "invalids":
+        logger.debug(f"Deleting old avatar for server {server_id}")
+        await delete_image_upload(server_info.avatar)
+
+    logger.info(f"Deleting server {server_id}...")
+    await delete_searchdb(server_info)
+    await server_info.delete()  # type: ignore
+    await TimeSeriesServerDelete.insert_one(TimeSeriesServerDelete(model_id=server_id))
+
+    return Result(success=True, message="Server deleted", code=None)

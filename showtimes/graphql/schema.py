@@ -31,6 +31,8 @@ from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import UNIXTimestamp
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
 from showtimes.graphql.cursor import Cursor
+from showtimes.graphql.models.common import KeyValueGQL
+from showtimes.graphql.models.fallback import NodeResult
 from showtimes.graphql.models.pagination import Connection, SortDirection
 from showtimes.graphql.models.projects import ProjectEpisodeInput, ProjectGQL, ProjectInputGQL
 from showtimes.graphql.models.servers import ServerGQL, ServerInputGQL
@@ -60,6 +62,7 @@ from .queries.showtimes import (
     resolve_projects_latest_information,
     resolve_server_fetch,
     resolve_server_project_fetch,
+    resolve_server_statistics,
     resolve_servers_fetch_paginated,
 )
 from .subscriptions.showtimes import (
@@ -233,6 +236,30 @@ class Query:
             )
 
         return await resolve_projects_latest_information(srv_id, limit, cursor, sort)
+
+    @gql.field(description="Get simple statistics information for all projects with pagination")
+    async def stats(
+        self,
+        info: Info[SessionQLContext, None],
+        id: UUID | None = gql.UNSET,
+    ) -> Result | NodeResult[KeyValueGQL[int]]:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        srv_id = None
+        if info.context.user.active is not None:
+            srv_id = UUID(info.context.user.active.server_id)
+        if isinstance(id, UUID):
+            srv_id = id
+
+        if srv_id is None:
+            return Result(
+                success=False,
+                message="No server selected, either use mutation selectServer or add id param to this query",
+                code=ErrorCode.ServerUnselect,
+            )
+
+        return await resolve_server_statistics(srv_id)
 
 
 @gql.type

@@ -16,7 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Generic, Optional, TypeVar
 
 import strawberry as gql
 
@@ -24,9 +24,12 @@ from .users import UserGQL
 
 __all__ = (
     "Result",
+    "NodeResult",
     "UserResult",
     "ErrorCode",
 )
+
+NodeT = TypeVar("NodeT")
 
 
 @gql.type(description="Simple result of mutation or an error")
@@ -34,6 +37,11 @@ class Result:
     success: bool = gql.field(description="Success status")
     message: Optional[str] = gql.field(description="Extra message if any, might be available if success is False")
     code: Optional[str] = gql.field(description="Extra code if any, might be available if success is False")
+
+
+@gql.type(description="Simple result wrapper for a list")
+class NodeResult(Generic[NodeT]):
+    nodes: list[NodeT] = gql.field(description="List of nodes")
 
 
 class ErrorCode:

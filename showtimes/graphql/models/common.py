@@ -28,6 +28,7 @@ __all__ = (
     "IntegrationInputGQL",
     "ImageMetadataGQL",
     "KeyValueInputGQL",
+    "KeyValueGQL",
 )
 KVT = TypeVar("KVT")
 
@@ -70,7 +71,13 @@ class ImageMetadataGQL:
         )
 
 
-@gql.input(name="KeyValueInput", description="A key-value pair")
+@gql.input(name="KeyValueInput", description="A key-value input pair")
 class KeyValueInputGQL(Generic[KVT]):
+    key: str = gql.field(description="The key")
+    value: KVT = gql.field(description="The value")
+
+
+@gql.type(name="KeyValue", description="A key-value pair")
+class KeyValueGQL(Generic[KVT]):
     key: str = gql.field(description="The key")
     value: KVT = gql.field(description="The value")

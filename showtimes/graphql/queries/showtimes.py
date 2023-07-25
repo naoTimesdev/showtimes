@@ -16,6 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Literal, TypeAlias, TypeVar
 from uuid import UUID
 
@@ -25,7 +26,8 @@ from beanie.operators import In as OpIn
 from bson import DBRef, ObjectId
 
 from showtimes.graphql.cursor import Cursor, parse_cursor, to_cursor
-from showtimes.graphql.models.fallback import ErrorCode
+from showtimes.graphql.models.common import KeyValueGQL
+from showtimes.graphql.models.fallback import ErrorCode, NodeResult, Result
 from showtimes.graphql.models.pagination import Connection, PageInfo, SortDirection
 from showtimes.graphql.models.projects import ProjectGQL
 from showtimes.graphql.models.servers import ServerGQL
@@ -37,6 +39,7 @@ __all__ = (
     "resolve_server_project_fetch",
     "resolve_projects_fetch_paginated",
     "resolve_projects_latest_information",
+    "resolve_server_statistics",
 )
 ResultT = TypeVar("ResultT")
 ResultOrT: TypeAlias = tuple[Literal[False], str, str] | tuple[Literal[True], ResultT, None]
@@ -238,3 +241,32 @@ async def resolve_projects_latest_information(
         ),
         nodes=mapped_items,
     )
+
+
+def _calculate_server_statistics(projects: list[ShowProject]) -> list[KeyValueGQL[int]]:
+    unfinished = 0
+    finished = 0
+    for project in projects:
+        if all(episode.is_released for episode in project.statuses):
+            finished += 1
+        else:
+            unfinished += 1
+    return [
+        KeyValueGQL(key="STATS_UNFINISHED", value=unfinished),
+        KeyValueGQL(key="STATS_FINISHED", value=finished),
+        KeyValueGQL(key="STATS_TOTAL", value=len(projects)),
+    ]
+
+
+async def resolve_server_statistics(
+    server_id: UUID,
+) -> Result | NodeResult[KeyValueGQL[int]]:
+    server = await ShowtimesServer.find_one(ShowtimesServer.server_id == server_id)
+    if not server:
+        return Result(success=False, message="Server not found", code=ErrorCode.ServerNotFound)
+    projects = await ShowProject.find(ShowProject.server_id == server_id).to_list()
+
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, _calculate_server_statistics, projects)
+    results.append(KeyValueGQL(key="STATS_OWNERS", value=len(server.owners)))
+    return NodeResult(nodes=results)

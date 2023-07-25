@@ -206,6 +206,28 @@ class QueryResults:
     poster_color: int | None
 
 
+def _extended_episode_counter(
+    external_episodes: list[ShowExternalEpisode], expected_count: int | None = None
+) -> list[ShowExternalEpisode]:
+    current_count = len(external_episodes)
+    additional_episodes: list[ShowExternalEpisode] = []
+    if expected_count is not None and expected_count > current_count:
+        # Make more episodes
+        last_ep_air = external_episodes[-1].airtime
+        for episode in range(current_count, expected_count):
+            act_eps = episode - current_count + 1
+            additional_episodes.append(
+                ShowExternalEpisode(
+                    episode=act_eps + 1,
+                    airtime=multiply_anilist_date(
+                        int(last_ep_air),
+                        act_eps,
+                    ).float_timestamp,
+                )
+            )
+    return additional_episodes
+
+
 async def _query_anilist_info_or_db(
     media_id: str, expected_count: int | None, type: SearchExternalTypeGQL
 ) -> Result | QueryResults:
@@ -230,6 +252,7 @@ async def _query_anilist_info_or_db(
 
     db_data = await ShowExternalAnilist.find_one(ShowExternalAnilist.ani_id == str(media_id))
     if db_data is not None:
+        db_data.episodes.extend(_extended_episode_counter(db_data.episodes, expected_count))
         return QueryResults(
             data=db_data,
             title=media.title.romaji or media.title.english or media.title.native,
@@ -274,21 +297,7 @@ async def _query_anilist_info_or_db(
                 )
             )
 
-    current_count = len(external_episodes)
-    if expected_count is not None and expected_count > current_count:
-        # Make more episodes
-        last_ep_air = external_episodes[-1].airtime
-        for episode in range(current_count, expected_count):
-            act_eps = episode - current_count + 1
-            external_episodes.append(
-                ShowExternalEpisode(
-                    episode=act_eps + 1,
-                    airtime=multiply_anilist_date(
-                        int(last_ep_air),
-                        act_eps,
-                    ).float_timestamp,
-                )
-            )
+    external_episodes.extend(_extended_episode_counter(external_episodes, expected_count))
 
     return QueryResults(
         data=ShowExternalAnilist(

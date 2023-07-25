@@ -24,7 +24,11 @@ from bson import ObjectId
 from strawberry.file_uploads import Upload
 from strawberry.types import Info
 
-from showtimes.controllers.sessions.handler import is_master_session
+from showtimes.controllers.sessions.handler import (
+    UserSessionWithToken,
+    get_session_handler,
+    is_master_session,
+)
 from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
@@ -265,16 +269,21 @@ class Query:
 @gql.type
 class Mutation:
     @gql.mutation(description="Login to Showtimes")
-    async def login(self, username: str, password: str, info: Info[SessionQLContext, None]) -> Union[UserGQL, Result]:
+    async def login(
+        self, username: str, password: str, info: Info[SessionQLContext, None]
+    ) -> Union[UserSessionGQL, Result]:
         if info.context.user is not None:
             return Result(success=False, message="You are already logged in", code=ErrorCode.SessionExist)
         success, user, code = await mutate_login_user(username, password)
         if not success and isinstance(user, str):
             return Result(success=False, message=user, code=code)
         user_info = UserGQL.from_db(cast(ShowtimesUser, user))
+        handler = get_session_handler()
+        session = user_info.to_session()
+        session = UserSessionWithToken.from_session(session, handler.sign_session(session.session_id))
         info.context.session_latch = True
-        info.context.user = user_info.to_session()
-        return user_info
+        info.context.user = session
+        return UserSessionGQL.from_session(session)
 
     @gql.mutation(description="Register to Showtimes")
     async def register(
@@ -358,8 +367,12 @@ class Mutation:
         if not success and isinstance(user, str):
             return Result(success=False, message=user, code=code)
         user_info = cast(UserGQL, user)
+        handler = get_session_handler()
+        session = user_info.to_session()
+        session = UserSessionWithToken.from_session(session, handler.sign_session(session.session_id))
+        await handler.remove_session(info.context.user)
         info.context.session_latch = True
-        info.context.user = user_info.to_session()
+        info.context.user = session
         return user_info
 
     @gql.mutation(description="Select or deselect an active server for an account")

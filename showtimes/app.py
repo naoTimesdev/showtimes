@@ -302,7 +302,10 @@ def create_app():
         terms_of_service="https://naoti.me/terms",
         middleware=[
             Middleware(
-                CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["Authorization", "Cookie"]
+                CORSMiddleware,
+                allow_origins=["*"],
+                allow_methods=["*"],
+                allow_headers=["Authorization", "Cookie"],
             ),
         ],
     )

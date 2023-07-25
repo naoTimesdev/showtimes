@@ -23,6 +23,7 @@ from uuid import UUID
 import strawberry as gql
 from beanie import PydanticObjectId
 
+from showtimes.controllers.sessions.handler import UserSessionWithToken
 from showtimes.models.database import (
     ShowtimesServer,
     ShowtimesTemporaryUser,
@@ -136,6 +137,7 @@ class UserSessionGQL:
     username: str = gql.field(description="The user's username")
     privilege: UserTypeGQL = gql.field(description="The user's privilege level")
     active_id: UUID | None = gql.field(description="The currently selected active server")
+    token: str = gql.field(description="The user's session token")
 
     session_id: gql.Private[UUID]
     object_id: gql.Private[str]  # ObjectId
@@ -152,7 +154,7 @@ class UserSessionGQL:
         return PartialServerGQL.from_db(server_fetch)
 
     @classmethod
-    def from_session(cls: Type[UserSessionGQL], session: UserSession) -> "UserSessionGQL":
+    def from_session(cls: Type[UserSessionGQL], session: UserSessionWithToken) -> "UserSessionGQL":
         return cls(
             id=UUID(session.user_id),
             username=session.username,
@@ -161,4 +163,5 @@ class UserSessionGQL:
             session_id=session.session_id,
             object_id=session.object_id,
             api_key=session.api_key,
+            token=session.token,
         )

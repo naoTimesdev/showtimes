@@ -21,15 +21,15 @@ from typing import Optional
 from strawberry.fastapi import BaseContext
 
 from showtimes.controllers.sessions import SessionHandler
-from showtimes.models.session import UserSession
+from showtimes.controllers.sessions.handler import UserSessionWithToken
 
 __all__ = ("SessionQLContext",)
 
 
 class SessionQLContext(BaseContext):
-    def __init__(self, session: SessionHandler, user: Optional[UserSession] = None):
+    def __init__(self, session: SessionHandler, user: Optional[UserSessionWithToken] = None):
         self.session: SessionHandler = session
-        self.user: Optional[UserSession] = user
+        self.user: Optional[UserSessionWithToken] = user
         self.session_latch: bool = False
         # Do not update cookie, but only internal session.
         self.latch_no_resp: bool = False

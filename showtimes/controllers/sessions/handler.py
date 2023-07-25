@@ -60,6 +60,24 @@ class CookieParameters(BaseModel):
     samesite: SameSiteEnum = SameSiteEnum.lax
 
 
+class UserSessionWithToken(UserSession):
+    token: str
+
+    @classmethod
+    def from_session(cls, session: UserSession, token: str):
+        return cls(
+            session_id=session.session_id,
+            user_id=session.user_id,
+            username=session.username,
+            privilege=session.privilege,
+            object_id=session.object_id,
+            discord_meta=session.discord_meta,
+            active=session.active,
+            api_key=session.api_key,
+            token=token,
+        )
+
+
 class SessionHandler:
     def __init__(
         self,
@@ -83,7 +101,10 @@ class SessionHandler:
 
         self.backend = backend
 
-        self._master_session = master_session
+        self._master_session = UserSessionWithToken.from_session(
+            master_session,
+            self.sign_session(master_session.session_id),
+        )
 
     def _make_key(self, data: UserSession):
         if data.api_key is not None:
@@ -91,12 +112,24 @@ class SessionHandler:
         return str(data.session_id)
 
     async def set_session(self, data: UserSession, response: Optional[Response] = None):
-        await self.backend.create(self._make_key(data), data)
+        await self.backend.create(
+            self._make_key(data),
+            UserSessionWithToken.from_session(
+                data,
+                self.sign_session(data.session_id),
+            ),
+        )
         if response is not None:
             self.set_cookie(response, data.session_id)
 
     async def update_session(self, data: UserSession, response: Optional[Response] = None):
-        await self.backend.update(self._make_key(data), data)
+        await self.backend.update(
+            self._make_key(data),
+            UserSessionWithToken.from_session(
+                data,
+                self.sign_session(data.session_id),
+            ),
+        )
         if response is not None:
             self.set_cookie(response, data.session_id)
 
@@ -116,13 +149,22 @@ class SessionHandler:
         logger.debug("Revoking all API Access!")
         await self.backend.bulk_delete("|apimode|*")
 
-    def set_cookie(self, response: Response, session_id: UUID):
+    def sign_session(self, session_id: UUID) -> str:
         dumps = self.signer.dumps(session_id.hex)
         if isinstance(dumps, bytes):
             dumps = dumps.decode("utf-8")
+        return dumps
+
+    def _unsign_session(self, session: str) -> UUID:
+        try:
+            return UUID(self.signer.loads(session, max_age=self.params.max_age, return_timestamp=False))
+        except (SignatureExpired, BadSignature) as exc:
+            raise SessionError(detail="Session expired/invalid", status_code=401) from exc
+
+    def set_cookie(self, response: Response, session_id: UUID):
         response.set_cookie(
             key=self.model.name,
-            value=dumps,
+            value=self.sign_session(session_id),
             max_age=self.params.max_age,
             path=self.params.path,
             domain=self.params.domain,
@@ -153,7 +195,7 @@ class SessionHandler:
     def identifier(self) -> str:
         return self._identifier
 
-    async def __call__(self, request: Union[Request, WebSocket]):
+    async def __call__(self, request: Union[Request, WebSocket]) -> UserSessionWithToken:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Token "):
             auth_header = auth_header[6:]
@@ -166,7 +208,7 @@ class SessionHandler:
             logger.debug(f"[{auth_header}] Checking if session is already active")
             session_auth = await self.backend.read(f"|apimode|{auth_header}")
             if session_auth:
-                return session_auth
+                return UserSessionWithToken.from_session(session_auth, self.sign_session(session_auth.session_id))
             logger.debug(f"[{auth_header}] Checking if user exist with this API key")
             user_with_key = await ShowtimesUser.find_one(ShowtimesUser.api_key == auth_header)
             if user_with_key is None:
@@ -174,25 +216,29 @@ class SessionHandler:
             logger.debug(f"[{auth_header}] Creating new session for user")
             user_session = UserSession.from_db(user_with_key)
             await self.set_session(user_session)
-            return user_session
+            return UserSessionWithToken.from_session(user_session, self.sign_session(user_session.session_id))
+        elif auth_header and auth_header.startswith("Bearer "):
+            auth_header = auth_header[7:]
+            logger.debug(f"Detected login via Bearer token: {auth_header}")
+            session_auth = await self.backend.read(self._unsign_session(auth_header))
+            if session_auth:
+                return UserSessionWithToken.from_session(session_auth, self.sign_session(session_auth.session_id))
+            raise SessionError(detail="Unknown Bearer token", status_code=401)
 
         logger.debug("Checking if session is already active")
         signed_session = request.cookies.get(self.model.name)
         if not signed_session:
             raise SessionError(detail="No session found", status_code=403)
 
-        try:
-            logger.debug(f"Checking session: {signed_session}")
-            session = UUID(self.signer.loads(signed_session, max_age=self.params.max_age, return_timestamp=False))
-        except (SignatureExpired, BadSignature) as exc:
-            raise SessionError(detail="Session expired/invalid", status_code=401) from exc
+        logger.debug(f"Checking session: {signed_session}")
+        session = self._unsign_session(signed_session)
 
         logger.debug(f"Session is valid: {session}, checking backend")
         session_data = await self.backend.read(session)
         if not session_data:
             raise SessionError(detail="Session expired/invalid", status_code=401)
         logger.debug(f"Session is valid: {session}, returning session data")
-        return session_data
+        return UserSessionWithToken.from_session(session_data, signed_session)
 
 
 _GLOBAL_SESSION_HANDLER: Optional[SessionHandler] = None
@@ -245,7 +291,7 @@ def get_session_handler() -> SessionHandler:
     return _GLOBAL_SESSION_HANDLER
 
 
-async def check_session(request: Union[Request, WebSocket]) -> UserSession:
+async def check_session(request: Union[Request, WebSocket]) -> UserSessionWithToken:
     session_handler = get_session_handler()
     return await session_handler(request)
 

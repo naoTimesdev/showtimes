@@ -689,6 +689,7 @@ async def mutate_project_update(
 
     if isinstance(input_data.aliases, list):
         project_info.aliases = input_data.aliases
+        save_changes = True
 
     delete_show_actor: list[ShowActor] = []
     if isinstance(input_data.assignees, list):

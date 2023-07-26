@@ -23,20 +23,24 @@ from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
 from bson import ObjectId
 
+from showtimes.controllers.prediction import PredictionInput, PredictionType, get_prediction_system
 from showtimes.extensions.graphql.scalars import DateTime, Upload
 from showtimes.models.database import (
+    EpisodeStatus,
     ShowExternalAnilist,
     ShowExternalData,
     ShowExternalTMDB,
     ShowProject,
     ShowtimesCollaborationLinkSync,
 )
+from showtimes.tooling import get_logger
 
 from .collab import ProjectCollabLinkGQL
 from .common import ImageMetadataGQL, IntegrationGQL, IntegrationInputGQL, KeyValueInputGQL
 from .enums import (
     ProjectExternalTypeGQL,
     ProjectInputAssigneeActionGQL,
+    ProjectPredictionModelGQL,
     SearchExternalTypeGQL,
     SearchSourceTypeGQL,
 )
@@ -55,11 +59,79 @@ __all__ = (
     "ProjectInputAssigneeInfoGQL",
     "ProjectInputAssigneeGQL",
     "ProjectInputGQL",
+    "ProjectPredictionGQL",
 )
+logger = get_logger("Showtimes.GraphQL.Showtimes.Projects")
+
+
+@gql.type(name="ProjectPrediction", description="The project prediction information")
+class ProjectPredictionGQL:
+    server_id: gql.Private[str]
+    count: gql.Private[int]
+    type: gql.Private[str]
+    priv_next_ep: gql.Private[int | None]
+
+    @gql.field(description="Next episode prediction in days")
+    async def next_episode(self, model: ProjectPredictionModelGQL = ProjectPredictionModelGQL.HISTORY) -> int | None:
+        if self.priv_next_ep is None:
+            # Every project is done
+            return None
+
+        system = get_prediction_system()
+        try:
+            result = await system.predict(
+                PredictionInput(self.server_id, self.count, self.type, self.priv_next_ep),
+                type=PredictionType.NEXT,
+                use_simulated=model == ProjectPredictionModelGQL.SIMULATED,
+            )
+            return result
+        except Exception as err:
+            logger.error("Failed to predict overall", exc_info=err)
+            return None
+
+    @gql.field(description="Overall prediction in days")
+    async def overall(self, model: ProjectPredictionModelGQL = ProjectPredictionModelGQL.HISTORY) -> int | None:
+        if self.priv_next_ep is None:
+            # Every project is done
+            return None
+
+        system = get_prediction_system()
+        try:
+            result = await system.predict(
+                PredictionInput(self.server_id, self.count, self.type, self.priv_next_ep),
+                type=PredictionType.OVERALL,
+                use_simulated=model == ProjectPredictionModelGQL.SIMULATED,
+            )
+            return result
+        except Exception as err:
+            logger.error("Failed to predict overall", exc_info=err)
+            return None
+
+    @classmethod
+    def from_db(cls: Type[ProjectPredictionGQL], project: ShowProject):
+        _found_latest: EpisodeStatus | None = None
+        for status in project.statuses:
+            if status.is_released:
+                continue
+            _found_latest = status
+            break
+        count = len(project.statuses)
+        mapped_types = {
+            "SHOWS": "MOVIE" if count > 1 else "TV",
+        }
+        proj_type = mapped_types.get(project.type.value, project.type.value)
+        return ProjectPredictionGQL(
+            server_id=str(project.server_id),
+            count=count,
+            type=proj_type,
+            priv_next_ep=_found_latest.episode if _found_latest is not None else None,
+        )
 
 
 @gql.type(name="Project", description="The project information")
 class ProjectGQL(PartialProjectInterface):
+    prediction: ProjectPredictionGQL = gql.field(description="The project prediction information")
+
     @gql.field(description="The project collaboration sync status")
     async def collaborations(self) -> ProjectCollabLinkGQL | None:
         collab_sync = await ShowtimesCollaborationLinkSync.find_one(
@@ -123,6 +195,8 @@ class ProjectGQL(PartialProjectInterface):
             updated_at=cast(DateTime, project.updated_at),
             project_id=str(project.id),
             ex_proj_id=str(project.external.ref.id),
+            type=project.type,
+            prediction=ProjectPredictionGQL.from_db(project),
         )
 
 

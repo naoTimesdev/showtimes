@@ -31,6 +31,7 @@ from strawberry.exceptions import StrawberryGraphQLError
 from showtimes.controllers.anilist import get_anilist_client, init_anilist_client
 from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.database import ShowtimesDatabase
+from showtimes.controllers.prediction import load_prediction_models
 from showtimes.controllers.pubsub import get_pubsub
 from showtimes.controllers.redisdb import get_redis, init_redis_client
 from showtimes.controllers.searcher import get_searcher, init_searcher
@@ -149,6 +150,9 @@ async def app_on_startup(run_production: bool = True):
     if TMDB_API_KEY is not None:
         logger.info("Creating TMDb client instances...")
         await init_tmdb_client(TMDB_API_KEY)
+
+    logger.info("Loading prediction model...")
+    await load_prediction_models()
 
     # Ready latch
     logger.info("Server is ready!")

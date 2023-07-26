@@ -23,7 +23,7 @@ import strawberry as gql
 from bson import ObjectId
 
 from showtimes.extensions.graphql.scalars import DateTime, UNIXTimestamp
-from showtimes.graphql.models.enums import ProjectExternalTypeGQL
+from showtimes.graphql.models.enums import ProjectExternalTypeGQL, ProjectTypeGQL
 from showtimes.models.database import (
     EpisodeStatus,
     RoleActor,
@@ -246,6 +246,7 @@ class PartialProjectInterface:
     """The project creation time"""
     updated_at: DateTime = gql.field(description="The project last update time")
     """The project last update time"""
+    type: ProjectTypeGQL = gql.field(description="The project type")
 
     project_id: gql.Private[str]  # ObjectId
     ex_proj_id: gql.Private[str]  # ObjectId
@@ -300,6 +301,7 @@ class PartialProjectGQL(PartialProjectInterface):
             statuses=statuses,
             created_at=cast(DateTime, project.created_at),
             updated_at=cast(DateTime, project.updated_at),
+            type=project.type,
             project_id=str(project.id),
             ex_proj_id=str(project.external.ref.id),
         )

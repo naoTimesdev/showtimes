@@ -131,6 +131,9 @@ async def mutate_migrate_user(
         logger.warning(f"User {username} has no migration request!")
         return False, "User has no migration request", ErrorCode.UserNotFound
 
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long", ErrorCode.UserRequirementPass
+
     migrate_user.password = await encrypt_password(password)
     await migrate_user.save()  # type: ignore
 

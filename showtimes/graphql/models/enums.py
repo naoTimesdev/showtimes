@@ -20,17 +20,19 @@ from enum import Enum
 
 import strawberry as gql
 
-from showtimes.models.database import ShowExternalType, ShowtimesTempUserType, UserType
+from showtimes.models.database import ShowExternalType, ShowProjectType, ShowtimesTempUserType, UserType
 
 __all__ = (
     "UserTypeGQL",
     "UserTempTypeGQL",
     "ProjectExternalTypeGQL",
+    "ProjectTypeGQL",
     "SearchExternalTypeGQL",
     "SearchTitleTypeGQL",
     "SearchSourceTypeGQL",
     "IntegrationInputActionGQL",
     "ProjectInputAssigneeActionGQL",
+    "ProjectPredictionModelGQL",
 )
 
 UserTypeGQL = gql.enum(
@@ -47,6 +49,11 @@ ProjectExternalTypeGQL = gql.enum(
     ShowExternalType,
     name="ProjectExternalType",
     description="The external project type or source type",
+)
+ProjectTypeGQL = gql.enum(
+    ShowProjectType,
+    name="ProjectType",
+    description="The project type",
 )
 
 
@@ -89,3 +96,11 @@ class ProjectInputAssigneeActionGQL(Enum):
     """Delete the assignee if it exists, will also delete the assignee's status"""
     UPSERT = "modify"
     """Modify the assignee if it exists, otherwise add it (default)"""
+
+
+@gql.enum(name="ProjectPredictionModel", description="The prediction model for the project")
+class ProjectPredictionModelGQL(Enum):
+    HISTORY = "history"
+    """Use history data for the prediction"""
+    SIMULATED = "simulated"
+    """Use history data with extra simulated noise for the prediction"""

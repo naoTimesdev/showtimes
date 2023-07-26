@@ -12,6 +12,7 @@ from .anilist import *
 from .claim import *
 from .database import *
 from .gqlapi import *
+from .prediction import *
 from .pubsub import *
 from .ratelimiter import *
 from .redisdb import *

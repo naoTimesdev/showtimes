@@ -264,6 +264,12 @@ class ShowExternalTMDB(ShowExternalData, ShowExternalStart):
         self.type = ShowExternalType.TMDB
 
 
+class ShowProjectType(str, Enum):
+    SHOWS = "SHOWS"
+    BOOKS = "BOOKS"
+    UNKNOWN = "UNKNOWN"
+
+
 class ShowProject(Document):
     """
     The document to hold each project.
@@ -297,6 +303,8 @@ class ShowProject(Document):
     """The time this project was created."""
     updated_at: DateTime = Field(default_factory=pendulum_utc)
     """The time this project was last updated."""
+    type: ShowProjectType = Field(default=ShowProjectType.SHOWS)
+    """The type of the project."""
 
     @after_event(*AllEvent)
     def coerce_penulum(self):

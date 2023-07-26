@@ -29,13 +29,14 @@ from showtimes.graphql.models.common import IntegrationInputGQL
 from showtimes.graphql.models.enums import IntegrationInputActionGQL
 from showtimes.graphql.models.fallback import ErrorCode, Result
 from showtimes.graphql.models.servers import ServerInputGQL
-from showtimes.graphql.mutations.common import common_mutate_project_delete
+from showtimes.graphql.mutations.common import common_mutate_project_delete, query_aggregate_project_ids
 from showtimes.models.database import (
     ImageMetadata,
     IntegrationId,
     ShowProject,
     ShowtimesServer,
     ShowtimesUser,
+    ShowtimesUserGroup,
     to_link,
 )
 from showtimes.models.searchdb import ServerSearch
@@ -46,6 +47,7 @@ __all__ = (
     "mutate_server_add",
     "mutate_server_update",
     "mutate_server_delete",
+    "mutate_server_update_owners",
 )
 ResultT = TypeVar("ResultT")
 ResultOrT: TypeAlias = tuple[Literal[False], str, str] | tuple[Literal[True], ResultT, None]
@@ -55,7 +57,10 @@ logger = get_logger("Showtimes.GraphQL.Mutations.Servers")
 async def update_searchdb(server: ShowtimesServer) -> None:
     logger.debug(f"Updating Server Search Index for server {server.server_id}")
     searcher = get_searcher()
-    await searcher.update_document(ServerSearch.from_db(server))
+    servers = ServerSearch.from_db(server)
+    project_ids = await query_aggregate_project_ids([project.ref.id for project in server.projects])
+    servers.projects = [str(project.show_id) for project in project_ids]
+    await searcher.update_document(servers)
 
 
 async def delete_searchdb(server: ShowtimesServer) -> None:
@@ -151,6 +156,55 @@ async def mutate_server_update(
         await update_searchdb(server_info)
     else:
         logger.warning(f"No changes to save for server {id}")
+    return True, server_info, None
+
+
+async def mutate_server_update_owners(
+    id: UUID,
+    input_data: list[UUID],
+    owner_id: str | None = None,
+) -> ResultOrT[ShowtimesServer]:
+    logger.info(f"Updating server owner {id}")
+    server_info = await ShowtimesServer.find_one(ShowtimesServer.server_id == id)
+
+    if not server_info:
+        logger.warning(f"Server {id} not found")
+        return False, "Server not found", ErrorCode.ServerNotFound
+
+    owners = [owner.ref.id for owner in server_info.owners]
+    if owner_id and ObjectId(owner_id) not in owners:
+        logger.warning(f"Owner {owner_id} not found")
+        return False, "You are not one of the owner of this server", ErrorCode.ServerNotAllowed
+    first_owner: UUID | None = None
+
+    logger.info(f"Fetching owners for server {id} | {owners}")
+    fetch_owners = await ShowtimesUserGroup.find(OpIn(ShowtimesUser.id, owners), with_children=True).to_list()
+    first_owner_db = fetch_owners[0]
+    logger.info(f"First owner is {first_owner_db} | {input_data}")
+    ids_to_owner = {owner.user_id: owner for owner in fetch_owners}
+    for owner in input_data:
+        if owner == first_owner_db.user_id:
+            first_owner = owner
+            break
+
+    if first_owner is None:
+        logger.warning("First owner is deleted, cannot remove the first owner")
+        return False, "You cannot remove the first owner of the server", ErrorCode.ServerOwnerNotAllowed
+
+    input_data.remove(first_owner)
+    logger.info(f"Removed owner {first_owner} | {input_data}")
+
+    reposition_owners = [first_owner_db]
+    for owner in input_data:
+        owner_db = ids_to_owner.get(owner)
+        if owner_db is None:
+            continue
+        reposition_owners.append(owner_db)
+
+    server_info.owners = [to_link(owner) for owner in reposition_owners]
+    logger.info(f"Saving changes for server {id} | {reposition_owners}")
+    await server_info.save()  # type: ignore
+    await update_searchdb(server_info)
     return True, server_info, None
 
 

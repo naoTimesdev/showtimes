@@ -26,6 +26,7 @@ from showtimes.controllers.claim import get_claim_status
 from showtimes.controllers.searcher import get_searcher
 from showtimes.controllers.security import encrypt_password
 from showtimes.controllers.sessions.handler import get_session_handler
+from showtimes.graphql.mutations.common import query_aggregate_project_ids
 from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, UserType
 from showtimes.models.searchdb import ProjectSearch, ServerSearch, UserSearch
 from showtimes.models.session import UserSession
@@ -103,6 +104,10 @@ async def server_search_reindex_users(user: Annotated[UserSession, Depends(prote
     async for show_user in ShowtimesUser.find_all():
         prompted_data.append(UserSearch.from_db(show_user))
     await searcher.update_documents(prompted_data)
+    await searcher.update_facet(
+        UserSearch.Config.index,
+        ["id", "username", "integrations.id", "integrations.type"],
+    )
     return ResponseType(error="Users is being reindexed").to_orjson()
 
 
@@ -114,8 +119,12 @@ async def server_search_reindex_servers(user: Annotated[UserSession, Depends(pro
 
     prompted_data = []
     async for show_user in ShowtimesServer.find_all():
-        prompted_data.append(ServerSearch.from_db(show_user))
+        projected_project = await query_aggregate_project_ids([uproj.ref.id for uproj in show_user.projects])
+        show_search = ServerSearch.from_db(show_user)
+        show_search.projects = [str(project.show_id) for project in projected_project]
+        prompted_data.append(show_search)
     await searcher.update_documents(prompted_data)
+    await searcher.update_facet(ServerSearch.Config.index, ["id", "integrations.id", "integrations.type", "projects"])
     return ResponseType(error="Servers is being reindexed").to_orjson()
 
 
@@ -131,4 +140,5 @@ async def server_search_reindex_projects(user: Annotated[UserSession, Depends(pr
     async for show_user in ShowProject.find_all():
         prompted_data.append(ProjectSearch.from_db(show_user))
     await searcher.update_documents(prompted_data)
+    await searcher.update_facet(ProjectSearch.Config.index, ["id", "integrations.id", "integrations.type", "server_id"])
     return ResponseType(error="Servers is being reindexed").to_orjson()

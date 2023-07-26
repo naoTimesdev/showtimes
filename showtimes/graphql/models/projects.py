@@ -21,14 +21,33 @@ from typing import Type, cast
 import strawberry as gql
 from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
+from bson import ObjectId
 
 from showtimes.extensions.graphql.scalars import DateTime, Upload
-from showtimes.models.database import ShowProject, ShowtimesCollaborationLinkSync
+from showtimes.models.database import (
+    ShowExternalAnilist,
+    ShowExternalData,
+    ShowExternalTMDB,
+    ShowProject,
+    ShowtimesCollaborationLinkSync,
+)
 
 from .collab import ProjectCollabLinkGQL
 from .common import ImageMetadataGQL, IntegrationGQL, IntegrationInputGQL, KeyValueInputGQL
-from .enums import ProjectInputAssigneeActionGQL, SearchExternalTypeGQL, SearchSourceTypeGQL
-from .partials import PartialProjectInterface, ProjectAssigneeGQL, ProjectStatusGQL, ShowPosterGQL
+from .enums import (
+    ProjectExternalTypeGQL,
+    ProjectInputAssigneeActionGQL,
+    SearchExternalTypeGQL,
+    SearchSourceTypeGQL,
+)
+from .partials import (
+    PartialProjectInterface,
+    ProjectAssigneeGQL,
+    ProjectExternalAniListGQL,
+    ProjectExternalTMDbGQL,
+    ProjectStatusGQL,
+    ShowPosterGQL,
+)
 
 __all__ = (
     "ProjectGQL",
@@ -54,8 +73,24 @@ class ProjectGQL(PartialProjectInterface):
 
         return ProjectCollabLinkGQL.from_db(self.server_id, self.id, collab_sync)
 
+    @gql.field(description="The project external information")
+    async def external(self) -> ProjectExternalAniListGQL | ProjectExternalTMDbGQL:
+        external_info = await ShowExternalData.find_one(
+            ShowExternalData.id == ObjectId(self.ex_proj_id),
+            with_children=True,
+        )
+        if external_info is None:
+            raise ValueError(f"Project external information not found for {self.id}")
+
+        if external_info.type == ProjectExternalTypeGQL.ANILIST:
+            return ProjectExternalAniListGQL.from_db(cast(ShowExternalAnilist, external_info))
+        elif external_info.type == ProjectExternalTypeGQL.TMDB:
+            return ProjectExternalTMDbGQL.from_db(cast(ShowExternalTMDB, external_info))
+        else:
+            raise ValueError("Unknown project external type")
+
     @classmethod
-    def from_db(cls: Type[ProjectGQL], project: ShowProject, *, only_latest: bool = False):
+    def from_db(cls: Type[ProjectGQL], project: ShowProject, *, only_latest: bool = False, include_last: bool = False):
         statuses: list[ProjectStatusGQL] = [ProjectStatusGQL.from_db(status) for status in project.statuses]
         if only_latest:
             _found_latest: ProjectStatusGQL | None = None
@@ -66,6 +101,8 @@ class ProjectGQL(PartialProjectInterface):
                 break
             if _found_latest is None:
                 statuses = []
+                if include_last:
+                    statuses.append(ProjectStatusGQL.from_db(project.statuses[-1]))
             else:
                 statuses = [_found_latest]
         return cls(

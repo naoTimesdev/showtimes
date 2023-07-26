@@ -164,6 +164,10 @@ class ShowtimesSearcher(Generic[SchemaT]):
     async def delete_index(self, index_name: str):
         await self._client.delete_index_if_exists(index_name)
 
+    async def update_facet(self, index_name: str, facet: list[str]):
+        index = self._client.index(index_name)
+        await index.update_filterable_attributes(facet)
+
 
 _SHOWTIMES_SEARCHER: ShowtimesSearcher | None = None
 

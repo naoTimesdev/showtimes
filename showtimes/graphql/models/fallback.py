@@ -66,6 +66,7 @@ class ErrorCode:
     ServerUnselect = "SERVER_UNSELECT"
     ServerNotFound = "SERVER_NOT_FOUND"
     ServerNotAllowed = "SERVER_NOT_ALLOWED"
+    ServerOwnerNotAllowed = "SERVER_ADMIN_NOT_ALLOWED"
     ServerError = "SERVER_ERROR"
     ProjectNotFound = "PROJECT_NOT_FOUND"
     ImageUploadFailed = "IMAGE_UPLOAD_FAILED"

@@ -21,6 +21,7 @@ from uuid import UUID
 from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
 from bson import ObjectId
+from pydantic import BaseModel
 
 from showtimes.controllers.searcher import get_searcher
 from showtimes.controllers.storages import get_storage
@@ -37,10 +38,21 @@ from showtimes.models.timeseries import TimeSeriesProjectDelete
 from showtimes.tooling import get_logger
 
 __all__ = (
+    "query_aggregate_project_ids",
     "common_mutate_project_delete",
     "delete_project_searchdb",
 )
 logger = get_logger("Showtimes.GraphQL.Mutations.Common")
+
+
+class SimpleProjectId(BaseModel):
+    show_id: UUID
+    server_id: UUID
+
+
+async def query_aggregate_project_ids(project_ids: list[ObjectId]):
+    results = await ShowProject.find(OpIn(ShowProject.id, project_ids)).project(SimpleProjectId).to_list()
+    return results
 
 
 async def delete_project_searchdb(project_id: UUID) -> None:

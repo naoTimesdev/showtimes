@@ -51,7 +51,12 @@ from .mutations.projects import (
     mutate_project_update,
     mutate_project_update_episode,
 )
-from .mutations.servers import mutate_server_add, mutate_server_delete, mutate_server_update
+from .mutations.servers import (
+    mutate_server_add,
+    mutate_server_delete,
+    mutate_server_update,
+    mutate_server_update_owners,
+)
 from .mutations.users import (
     mutate_login_user,
     mutate_migrate_user,
@@ -205,6 +210,7 @@ class Query:
         self,
         info: Info[SessionQLContext, None],
         ids: list[UUID] | None = gql.UNSET,
+        server_ids: list[UUID] | None = gql.UNSET,
         limit: int = 10,
         cursor: Cursor | None = gql.UNSET,
         sort: SortDirection = SortDirection.ASC,
@@ -212,7 +218,7 @@ class Query:
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
 
-        return await resolve_projects_fetch_paginated(ids, limit, cursor, sort)
+        return await resolve_projects_fetch_paginated(ids, server_ids, limit, cursor, sort)
 
     @gql.field(description="Get latest progress for all projects with pagination")
     async def latests(
@@ -222,6 +228,7 @@ class Query:
         limit: int = 10,
         cursor: Cursor | None = gql.UNSET,
         sort: SortDirection = SortDirection.ASC,
+        include_last: bool = False,
     ) -> Result | Connection[ProjectGQL]:
         if info.context.user is None:
             return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
@@ -239,7 +246,7 @@ class Query:
                 code=ErrorCode.ServerUnselect,
             )
 
-        return await resolve_projects_latest_information(srv_id, limit, cursor, sort)
+        return await resolve_projects_latest_information(srv_id, limit, cursor, sort, include_last)
 
     @gql.field(description="Get simple statistics information for all projects with pagination")
     async def stats(
@@ -473,6 +480,37 @@ class Mutation:
 
         return ServerGQL.from_db(srv_info)
 
+    @gql.mutation(description="Update a server owners")
+    async def update_server_owners(
+        self, owners: list[UUID], info: Info[SessionQLContext, None], id: UUID | None = None
+    ) -> Result | ServerGQL:
+        if info.context.user is None:
+            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
+
+        srv_id: UUID | None = None
+        if info.context.user.active is not None:
+            srv_id = UUID(info.context.user.active.server_id)
+        if isinstance(id, UUID):
+            srv_id = id
+
+        if srv_id is None:
+            return Result(
+                success=False,
+                message="No server selected, either use mutation selectServer or add id param to this query",
+                code=ErrorCode.ServerUnselect,
+            )
+
+        owner_id: str | None = None
+        if info.context.user.privilege != UserType.ADMIN:
+            owner_id = info.context.user.object_id
+
+        success, srv_info, err_code = await mutate_server_update_owners(srv_id, owners, owner_id)
+        if not success and isinstance(srv_info, str):
+            return Result(success=False, message=srv_info, code=err_code)
+        srv_info = cast(ShowtimesServer, srv_info)
+
+        return ServerGQL.from_db(srv_info)
+
     @gql.mutation(description="Delete a server")
     async def delete_server(self, info: Info[SessionQLContext, None], id: UUID) -> Result:
         if info.context.user is None:
@@ -482,6 +520,12 @@ class Mutation:
         if info.context.user.privilege != UserType.ADMIN:
             owner_id = info.context.user.object_id
         response = await mutate_server_delete(id, owner_id)
+        if response.success:
+            if info.context.user.active and info.context.user.active.server_id == str(id):
+                # Reset active server
+                info.context.user.active = None
+                info.context.session_latch = True
+                info.context.latch_no_resp = True
         return response
 
     # Project mutation

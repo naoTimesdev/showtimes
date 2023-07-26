@@ -74,6 +74,7 @@ from showtimes.models.database import (
     ShowExternalEpisode,
     ShowPoster,
     ShowProject,
+    ShowProjectType,
     ShowtimesServer,
     to_link,
 )
@@ -82,7 +83,7 @@ from showtimes.models.timeseries import TimeSeriesProjectEpisodeChanges
 from showtimes.tooling import get_logger
 from showtimes.utils import complex_walk, make_uuid
 
-from .common import common_mutate_project_delete
+from .common import common_mutate_project_delete, query_aggregate_project_ids
 
 __all__ = (
     "mutate_project_add",
@@ -199,12 +200,24 @@ async def _query_anilist_airing_schedules(media_id: str):
     return joined_data
 
 
+def _coerce_anilist_format(format_str: str) -> ShowProjectType:
+    format_str = format_str.upper()
+    shows = ["TV", "TV_SHORT", "SPECIAL", "OVA", "MOVIE", "ONA", "MUSIC"]
+    books = ["MANGA", "NOVEL", "ONE_SHOT"]
+    if format_str in shows:
+        return ShowProjectType.SHOWS
+    if format_str in books:
+        return ShowProjectType.BOOKS
+    return ShowProjectType.UNKNOWN
+
+
 @dataclass
 class QueryResults:
     data: ShowExternalData
     title: str
     poster_url: str | None
     poster_color: int | None
+    format: ShowProjectType
     other_titles: list[str] = field(default_factory=list)
 
 
@@ -264,6 +277,7 @@ async def _query_anilist_info_or_db(
             poster_url=media.coverImage.extraLarge or media.coverImage.large or media.coverImage.medium,
             poster_color=rgbhex_to_rgbint(media.coverImage.color),
             other_titles=title_aliases,
+            format=_coerce_anilist_format(media.format),
         )
 
     if expected_count is None:
@@ -316,6 +330,7 @@ async def _query_anilist_info_or_db(
         poster_url=media.coverImage.extraLarge or media.coverImage.large or media.coverImage.medium,
         poster_color=rgbhex_to_rgbint(media.coverImage.color),
         other_titles=title_aliases,
+        format=_coerce_anilist_format(media.format),
     )
 
 
@@ -328,6 +343,9 @@ async def update_searchdb(project: ShowProject) -> None:
 async def update_server_searchdb(server: ShowtimesServer) -> None:
     logger.debug(msg=f"Updating Server Search Index for server {server.server_id}")
     searcher = get_searcher()
+    servers = ServerSearch.from_db(server)
+    project_ids = await query_aggregate_project_ids([project.ref.id for project in server.projects])
+    servers.projects = [str(project.show_id) for project in project_ids]
     await searcher.update_document(ServerSearch.from_db(server))
 
 
@@ -595,6 +613,7 @@ async def mutate_project_add(
         show_id=project_id,
         integrations=_process_input_integration(input_data.integrations),
         aliases=project_aliases,
+        type=source_info.format,
     )
 
     logger.info(f"Saving project {project_id}")

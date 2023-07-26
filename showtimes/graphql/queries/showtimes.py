@@ -136,6 +136,7 @@ async def resolve_server_project_fetch(srv_id: str, project_id: str) -> ResultOr
 
 async def resolve_projects_fetch_paginated(
     ids: list[UUID] | None = gql.UNSET,
+    server_ids: list[UUID] | None = gql.UNSET,
     limit: int = 20,
     cursor: Cursor | None = gql.UNSET,
     sort: SortDirection = SortDirection.ASC,
@@ -145,10 +146,13 @@ async def resolve_projects_fetch_paginated(
 
     cursor_id = parse_cursor(cursor)
     find_args = []
-    added_query_ids = False
+    count_args = []
     if isinstance(ids, list):
         find_args.append(OpIn(ShowProject.show_id, ids))
-        added_query_ids = True
+        count_args.append(OpIn(ShowProject.show_id, ids))
+    if isinstance(server_ids, list):
+        find_args.append(OpIn(ShowProject.server_id, server_ids))
+        count_args.append(OpIn(ShowProject.server_id, server_ids))
     if cursor_id is not None:
         find_args.append(ShowProject.id >= cursor_id)
 
@@ -167,10 +171,7 @@ async def resolve_projects_fetch_paginated(
             nodes=[],
         )
 
-    if added_query_ids:
-        items_count = await ShowProject.find(find_args[0]).count()
-    else:
-        items_count = await ShowProject.find().count()
+    items_count = await ShowProject.find(*count_args).count()
 
     last_item = None
     if len(items) > limit:
@@ -197,6 +198,7 @@ async def resolve_projects_latest_information(
     limit: int = 20,
     cursor: Cursor | None = gql.UNSET,
     sort: SortDirection = SortDirection.ASC,
+    include_last: bool = False,
 ) -> Connection[ProjectGQL]:
     act_limit = limit + 1
     direction = "-" if sort is SortDirection.DESCENDING else "+"
@@ -230,7 +232,7 @@ async def resolve_projects_latest_information(
     next_cursor = last_item.id if last_item is not None else None
     has_next_page = next_cursor is not None
 
-    mapped_items = [ProjectGQL.from_db(item, only_latest=True) for item in items]
+    mapped_items = [ProjectGQL.from_db(item, only_latest=True, include_last=include_last) for item in items]
     return Connection(
         count=len(mapped_items),
         page_info=PageInfo(

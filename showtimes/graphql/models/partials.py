@@ -255,7 +255,9 @@ class PartialProjectInterface:
 class PartialProjectGQL(PartialProjectInterface):
     @gql.field(description="The project external information")
     async def external(self) -> ProjectExternalGQL:
-        external_info = await ShowExternalData.find_one(ShowExternalData.id == ObjectId(self.ex_proj_id))
+        external_info = await ShowExternalData.find_one(
+            ShowExternalData.id == ObjectId(self.ex_proj_id), with_children=True
+        )
         if external_info is None:
             raise ValueError("Project external information not found")
 

@@ -26,6 +26,8 @@ from uuid import UUID
 import aiohttp
 import pendulum
 import strawberry as gql
+from beanie.operators import And as OpAnd
+from beanie.operators import In as OpIn
 from bson import ObjectId
 
 from showtimes.controllers.anilist import (
@@ -75,6 +77,7 @@ from showtimes.models.database import (
     ShowPoster,
     ShowProject,
     ShowProjectType,
+    ShowtimesCollaborationLinkSync,
     ShowtimesServer,
     to_link,
 )
@@ -823,6 +826,23 @@ def _create_updated_statuses(
     return new_status, has_changed
 
 
+async def _update_project_for_server(project_info: ShowProject, episodes: list[ProjectEpisodeInput]):
+    logger.info(f"Updating project {project_info.show_id} episodes")
+    all_statuses = project_info.statuses
+    changed_statuses: list[EpisodeStatus] = []
+    old_statuses: list[EpisodeStatus] = []
+    for episode in episodes:
+        index = await project_info.async_get_episode_index(episode.episode)
+        if index is None:
+            continue
+        update, status_ch = _create_updated_statuses(all_statuses[index], episode)
+        if status_ch:
+            old_statuses.append(project_info.statuses[index].copy())
+            project_info.statuses[index] = update
+            changed_statuses.append(update)
+    return changed_statuses, old_statuses
+
+
 async def mutate_project_update_episode(
     project_id: UUID,
     episodes: list[ProjectEpisodeInput],
@@ -835,21 +855,7 @@ async def mutate_project_update_episode(
         return find_results
 
     project_info, _ = find_results
-
-    logger.info(f"Updating project {project_id} episodes")
-    all_statuses = project_info.statuses
-
-    changed_statuses: list[EpisodeStatus] = []
-    old_statuses: list[EpisodeStatus] = []
-    for episode in episodes:
-        index = await project_info.async_get_episode_index(episode.episode)
-        if index is None:
-            continue
-        update, status_ch = _create_updated_statuses(all_statuses[index], episode)
-        if status_ch:
-            old_statuses.append(project_info.statuses[index].copy())
-            project_info.statuses[index] = update
-            changed_statuses.append(update)
+    changed_statuses, old_statuses = await _update_project_for_server(project_info, episodes)
 
     if not changed_statuses:
         return Result(success=False, message="No episodes to update", code=ErrorCode.ProjectUpdateNoEpisode)
@@ -864,4 +870,35 @@ async def mutate_project_update_episode(
     )
     await TimeSeriesProjectEpisodeChanges.insert_one(ts_changes)
     await update_searchdb(project_info)
+
+    collab_sync = await ShowtimesCollaborationLinkSync.find_one(
+        OpAnd(
+            OpIn(ShowtimesCollaborationLinkSync.projects, [project_info.show_id]),
+            OpIn(ShowtimesCollaborationLinkSync.servers, [project_info.server_id]),
+        ),
+    )
+    if collab_sync is not None:
+        logger.info(f"Found collabration sync for {collab_sync.id}")
+        other_groups = collab_sync.projects
+        try:
+            other_groups.remove(project_info.show_id)
+        except ValueError:
+            pass
+        if len(other_groups) > 0:
+            logger.info(f"Found {len(other_groups)} other groups to sync with")
+            other_projects = await ShowProject.find(OpIn(ShowProject.show_id, other_groups)).to_list(None)
+            for project in other_projects:
+                logger.info(f"Updating project {project.show_id} episodes")
+                other_project_new, other_project_old = await _update_project_for_server(project, episodes)
+                if not other_project_new:
+                    continue
+                ts_changes = TimeSeriesProjectEpisodeChanges(
+                    model_id=project.show_id,
+                    server_id=project.server_id,
+                    old=other_project_old,
+                    new=other_project_new,
+                )
+                await TimeSeriesProjectEpisodeChanges.insert_one(ts_changes)
+                await update_searchdb(project)
+
     return Result(success=True, message="Episodes updated", code=ErrorCode.Success)

@@ -15,7 +15,7 @@ If not, see <https://www.gnu.org/licenses/>.
 """
 
 __name__ = "showtimes"
-__version__ = "0.1.0"
+__version__ = "2.0.0b2"
 __author__ = "noaione"
 __auuthor_email__ = "hi@n4o.xyz"
 __license__ = "AGPL-3.0"

@@ -23,7 +23,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.datastructures import Default
 from fastapi.middleware import Middleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from strawberry.exceptions import StrawberryGraphQLError
@@ -293,7 +293,7 @@ def create_app():
     logger = get_root_logger()
     # Initialize latch
     get_ready_status().unready()
-    logger.info("Creating backend app...")
+    logger.info(f"Initializing Showtimes v{app_version}...")
     app = FastAPI(
         title="Showtimes API",
         description=app_description,
@@ -371,5 +371,21 @@ def create_app():
     def _root_favicon():
         return FileResponse(ASSETS_FOLDER / "favicon.ico")
 
-    logger.info("Backend app created!")
+    # Disable robots
+    @app.get("/robots.txt", include_in_schema=False)
+    def _root_robots_txt():
+        DISALLOWED = ["*", "AdsBot-Google"]
+        ALLOWED = []
+        robots_txt = []
+        if DISALLOWED:
+            for disallow in DISALLOWED:
+                robots_txt.append(f"User-agent: {disallow}")
+            robots_txt.append("Disallow: /\n")
+        if ALLOWED:
+            for allow in ALLOWED:
+                robots_txt.append(f"User-agent: {allow}")
+            robots_txt.append("Disallow: /")
+        return PlainTextResponse("\n".join(robots_txt))
+
+    logger.info(f"Showtimes v{app_version} is ready, now accepting requests via Starlette!")
     return app

@@ -16,6 +16,7 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
+import asyncio
 from uuid import UUID
 
 from beanie.operators import And as OpAnd
@@ -25,8 +26,10 @@ from pydantic import BaseModel
 
 from showtimes.controllers.searcher import get_searcher
 from showtimes.controllers.storages import get_storage
+from showtimes.graphql.models.common import IntegrationInputGQL
 from showtimes.graphql.models.fallback import ErrorCode, Result
 from showtimes.models.database import (
+    DefaultIntegrationType,
     RoleActor,
     ShowProject,
     ShowtimesCollaborationLinkSync,
@@ -38,6 +41,8 @@ from showtimes.models.timeseries import TimeSeriesProjectDelete
 from showtimes.tooling import get_logger
 
 __all__ = (
+    "raise_for_invalid_integrations",
+    "async_raise_for_invalid_integrations",
     "query_aggregate_project_ids",
     "common_mutate_project_delete",
     "delete_project_searchdb",
@@ -48,6 +53,19 @@ logger = get_logger("Showtimes.GraphQL.Mutations.Common")
 class SimpleProjectId(BaseModel):
     show_id: UUID
     server_id: UUID
+
+
+def raise_for_invalid_integrations(integrations: list[IntegrationInputGQL]):
+    for idx, integration in enumerate(integrations):
+        if not integration.id.strip():
+            raise ValueError(f"Integration[{idx}] has empty ID")
+        if not DefaultIntegrationType.verify(integration.type):
+            raise ValueError(f"Integration[{idx}] has unknown type: {integration.type}")
+
+
+async def async_raise_for_invalid_integrations(integrations: list[IntegrationInputGQL]):
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, raise_for_invalid_integrations, integrations)
 
 
 async def query_aggregate_project_ids(project_ids: list[ObjectId]):

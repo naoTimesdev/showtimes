@@ -72,7 +72,7 @@ class ErrorCode:
     ImageUploadFailed = "IMAGE_UPLOAD_FAILED"
 
     # Add
-    ServerAddMissingNmae = "SERVER_ADD_MISSING_NAME"
+    ServerAddMissingName = "SERVER_ADD_MISSING_NAME"
     ProjectAddMissingExternal = "PROJECT_ADD_MISSING_EXTERNAL"
     ProjectAddUnsupportedExternal = "PROJECT_ADD_UNSUPPORTED_EXTERNAL"
     ProjectAddStartTimeUnknown = "PROJECT_ADD_START_TIME_UNKNOWN"

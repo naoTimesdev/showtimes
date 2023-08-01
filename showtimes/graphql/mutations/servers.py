@@ -29,7 +29,11 @@ from showtimes.graphql.models.common import IntegrationInputGQL
 from showtimes.graphql.models.enums import IntegrationInputActionGQL
 from showtimes.graphql.models.fallback import ErrorCode, Result
 from showtimes.graphql.models.servers import ServerInputGQL
-from showtimes.graphql.mutations.common import common_mutate_project_delete, query_aggregate_project_ids
+from showtimes.graphql.mutations.common import (
+    async_raise_for_invalid_integrations,
+    common_mutate_project_delete,
+    query_aggregate_project_ids,
+)
 from showtimes.models.database import (
     ImageMetadata,
     IntegrationId,
@@ -110,6 +114,7 @@ async def mutate_server_update(
         )
         save_changes = True
     if isinstance(input_data.integrations, list):
+        await async_raise_for_invalid_integrations(input_data.integrations)
         add_integrations: list[IntegrationInputGQL] = []
         remove_integrations: list[IntegrationInputGQL] = []
         modify_integrations: list[IntegrationInputGQL] = []
@@ -225,7 +230,7 @@ async def mutate_server_add(
     logger.info(f"Creating server with name {input_name}")
     if not isinstance(input_name, str):
         logger.warning("Invalid input, invalid/missing name")
-        return False, "Invalid input, invalid/missing name", ErrorCode.ServerAddMissingNmae
+        return False, "Invalid input, invalid/missing name", ErrorCode.ServerAddMissingName
 
     server_info = ShowtimesServer(name=input_name, owners=[to_link(owner_info)])
     if input_data.avatar is not None and input_data.avatar is not gql.UNSET:
@@ -244,6 +249,7 @@ async def mutate_server_add(
             parent=None,
         )
     if isinstance(input_data.integrations, list):
+        await async_raise_for_invalid_integrations(input_data.integrations)
         add_integrations: list[IntegrationInputGQL] = []
         for idx, integration in enumerate(input_data.integrations):
             if not isinstance(integration, IntegrationInputGQL):

@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import asyncio
 from enum import Enum
-from typing import Optional, TypeVar
+from functools import cached_property
+from typing import Optional, Type, TypeVar
 from uuid import UUID
 
 from beanie import (
@@ -84,6 +85,31 @@ class DefaultIntegrationType:
     FansubDBAnime = "FANSUBDB_ANIME_ID"
     ShowtimesUser = "SHOWTIMES_USER"
     PrefixAnnounce = "ANNOUNCEMENT_"
+
+    @cached_property
+    def all(self) -> dict[str, str]:
+        """:class:`dict[str, str]`: All the default type mappings."""
+        invalid_dir = ["all", "verify"]
+        return {k: getattr(self, k) for k in dir(self) if not k.startswith("__") and k not in invalid_dir}
+
+    @classmethod
+    def verify(cls: Type[DefaultIntegrationType], input_type: str) -> bool:
+        """Verify if the input type is valid.
+
+        Parameters
+        ----------
+        input_type: :class:`str`
+            The input type to verify.
+
+        Returns
+        -------
+        :class:`bool`
+            Whether the input type is valid or not.
+        """
+        all_inputs = cls().all
+        if input_type.startswith(cls.PrefixAnnounce):
+            input_type = input_type.replace(cls.PrefixAnnounce, "", 1)
+        return input_type in all_inputs.values()
 
 
 class IntegrationId(BaseModel):

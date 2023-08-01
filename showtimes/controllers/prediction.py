@@ -52,14 +52,14 @@ class PredictionInput:
 
 
 class PredictionModels:
-    _model_sim_next: RandomForestRegressor
-    _model_sim_overall: RandomForestRegressor
-    _model_non_next: RandomForestRegressor
-    _model_non_overall: RandomForestRegressor
-
     def __init__(self, *, loop: asyncio.AbstractEventLoop | None = None) -> None:
         self._available = False
         self._loop = loop or asyncio.get_event_loop()
+
+        self._model_non_next: RandomForestRegressor | None = None
+        self._model_non_overall: RandomForestRegressor | None = None
+        self._model_sim_next: RandomForestRegressor | None = None
+        self._model_sim_overall: RandomForestRegressor | None = None
 
     async def load(self):
         if self._available:
@@ -98,26 +98,32 @@ class PredictionModels:
         if not self._available:
             raise RuntimeError("Models are not loaded yet")
 
-        input_json = {
-            "id": self._str_to_intsafe(data.id),
-            "episode_count": data.episode_count,
-            "project_type": self._str_to_intsafe(data.project_type),
-        }
-        if isinstance(data.episode, int):
-            input_json["episode"] = data.episode
-
-        logger.debug(f"Doing prediction with {type} (simulated? {use_simulated}) | {data}")
-
-        df = pd.DataFrame([input_json])
-        df["id"] = df["id"].astype("category")
-        df["project_type"] = df["project_type"].astype("category")
-
         if type == PredictionType.NEXT:
             model = self._model_sim_next if use_simulated else self._model_non_next
         elif type == PredictionType.OVERALL:
             model = self._model_sim_overall if use_simulated else self._model_non_overall
         else:
             raise ValueError(f"Invalid prediction type: {type}")
+
+        if model is None:
+            raise RuntimeError(f"Selected model {type.name}{'-SIMULATED' if use_simulated else ''} is not loaded yet")
+
+        input_json = {
+            "episode_count": data.episode_count,
+            "project_type": self._str_to_intsafe(data.project_type),
+        }
+        if isinstance(data.episode, int):
+            input_json["episode"] = data.episode
+
+        if type == PredictionType.NEXT:
+            input_json["id"] = self._str_to_intsafe(data.id)
+
+        logger.debug(f"Doing prediction with {type} (simulated? {use_simulated}) | {data}")
+
+        df = pd.DataFrame([input_json])
+        if "id" in df.columns:
+            df["id"] = df["id"].astype("category")
+        df["project_type"] = df["project_type"].astype("category")
 
         result = await self._loop.run_in_executor(None, model.predict, df)
 

@@ -98,7 +98,7 @@ class ProjectPredictionGQL:
         system = get_prediction_system()
         try:
             result = await system.predict(
-                PredictionInput(self.server_id, self.count, self.type, self.priv_next_ep),
+                PredictionInput(self.server_id, self.count, self.type),
                 type=PredictionType.OVERALL,
                 use_simulated=model == ProjectPredictionModelGQL.SIMULATED,
             )

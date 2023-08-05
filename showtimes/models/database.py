@@ -462,15 +462,25 @@ class ShowtimesTemporaryUser(ShowtimesUserGroup):
     def persist_type(self):
         self.cls_id = _UserDocType.TEMPUSER
 
-    def to_user(self, hashed_password: str | None = None) -> ShowtimesUser:
+    def to_user(self, hashed_password: str | None = None, *, persist: bool = False) -> ShowtimesUser:
         """
         Convert the temporary user to a real user.
         """
+        if persist:
+            return ShowtimesUser(
+                id=self.id,
+                username=self.username,
+                password=hashed_password or self.password,
+                privilege=UserType.USER,
+                user_id=self.user_id,
+                integrations=self.integrations,
+            )
         return ShowtimesUser(
             username=self.username,
             password=hashed_password or self.password,
             privilege=UserType.USER,
             user_id=self.user_id,
+            integrations=self.integrations,
         )
 
 

@@ -200,17 +200,18 @@ async def mutate_migrate_user_approve(
         logger.warning(f"User {username} not found")
         return False, "User not found", ErrorCode.UserNotFound
 
+    if user.password.startswith("unset_"):
+        logger.warning(f"Migration are not initiated yet for {username}")
+        return False, "Migration are not initiated yet for this user", ErrorCode.UserMigrateNotInitiated
+
     if user.approval_code != approval_code:
         logger.warning(f"User {username} approval code is not correct")
         return False, "Approval code is not correct", ErrorCode.UserApprovalIncorrect
+    if not await verify_password(password, user.password):
+        logger.warning(f"User {username} password is not correct")
+        return False, "Password is not correct", ErrorCode.UserInvalidPass
 
-    new_user = ShowtimesUser(
-        id=user.id,
-        username=user.username,
-        password=await encrypt_password(password),
-        privilege=UserType.USER,
-        user_id=user.user_id,
-    )
+    new_user = user.to_user(persist=True)
     logger.info(f"Saving user {username} to database")
     await user.delete()  # type: ignore
     _new_user = await ShowtimesUser.insert_one(new_user)

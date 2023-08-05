@@ -52,6 +52,7 @@ class ErrorCode:
     UserDiscordMigrate = "USER_LEGACY_DISCORD_AUTH"
     UserApprovalIncorrect = "USER_APPROVAL_INCORRECT"
     UserInvalidPass = "USER_INVALID_PASSWORD"
+    UserMigrateNotInitiated = "USER_MIGRATE_NOT_INITIATED"
     UserRequirementPass = "USER_REQUIREMENT_PASSWORD"
     UserRequirementUsername = "USER_REQUIREMENT_USERNAME"
     UserInvalidOldPass = "USER_INVALID_OLD_PASSWORD"

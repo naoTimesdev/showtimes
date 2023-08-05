@@ -354,3 +354,13 @@ datasets/dump_*
 datasets/*.py
 ## Generated training data
 datasets/train_*
+
+# Unix socket
+*.sock
+
+# Extra files
+start.sh
+run.sh
+boot.sh
+restart.sh
+stop.sh

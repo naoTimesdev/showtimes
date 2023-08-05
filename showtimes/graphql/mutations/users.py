@@ -70,6 +70,9 @@ async def mutate_login_user(
     user = cast(ShowtimesUser, user)
     if user.password is None:
         logger.warning(f"User {username} has no password set")
+        if user.discord_meta is not None:
+            logger.warning(f"User {username} has discord meta, returning it")
+            return False, "Please use Discord to login, or do password reset first", ErrorCode.UserDiscordMigrate
         return False, "User has no password set, please do password reset first", ErrorCode.UserMigrate
 
     is_verify, new_password = await verify_password(password, user.password)

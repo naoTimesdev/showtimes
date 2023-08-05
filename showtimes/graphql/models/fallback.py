@@ -49,6 +49,7 @@ class ErrorCode:
     UserNotFound = "USER_NOT_FOUND"
     UserAlreadyExist = "USER_ALREADY_EXIST"
     UserMigrate = "USER_NEED_MIGRATE"
+    UserDiscordMigrate = "USER_LEGACY_DISCORD_AUTH"
     UserApprovalIncorrect = "USER_APPROVAL_INCORRECT"
     UserInvalidPass = "USER_INVALID_PASSWORD"
     UserRequirementPass = "USER_REQUIREMENT_PASSWORD"

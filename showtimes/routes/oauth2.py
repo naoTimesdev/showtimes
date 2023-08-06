@@ -111,12 +111,13 @@ async def oauth2_discord_authorize(base_url: str, redirect_url: str):
         "state": state_jacking,
     }
 
-    success = await redis.set(
+    success = await redis.setex(
         f"showtimes:oauth2:discord:state:{state_jacking}",
         {
             **params,
             "final_redirect": redirect_url,
         },
+        expires=5 * 60,
     )
     if not success:
         raise ShowtimesException(500, "Failed to create state parameter.")

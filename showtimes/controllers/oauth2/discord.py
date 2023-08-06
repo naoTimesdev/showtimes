@@ -23,7 +23,7 @@ import orjson
 
 from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.models.abstract import AttributeDict
-from showtimes.tooling import get_env_config
+from showtimes.tooling import get_env_config, get_logger
 
 from ..._metadata import __version__ as app_version
 
@@ -40,6 +40,7 @@ ResponseListT = tuple[list[RespT] | None, str]
 BASE_URL = "https://discord.com/api/v10"
 DISCORD_ID = env_conf.get("DISCORD_CLIENT_ID")
 DISCORD_SECRET = env_conf.get("DISCORD_CLIENT_SECRET")
+logger = get_logger("Showtimes.Controlers.OAuth2.Discord")
 
 
 class DiscordToken(AttributeDict):
@@ -107,6 +108,7 @@ class DiscordOAuth2API:
             "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
         }
 
+        logger.debug(f"Exchanging token for {params}")
         resp = await self._client.post(f"{BASE_URL}/oauth2/token", data=params, headers=headers)
         resp.raise_for_status()
 
@@ -126,6 +128,7 @@ class DiscordOAuth2API:
             "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
         }
 
+        logger.debug(f"Refreshing token for {params}")
         resp = await self._client.post(f"{BASE_URL}/oauth2/token", data=params, headers=headers)
         resp.raise_for_status()
 

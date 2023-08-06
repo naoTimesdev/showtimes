@@ -25,8 +25,6 @@ from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.models.abstract import AttributeDict
 from showtimes.tooling import get_env_config, get_logger
 
-from ..._metadata import __version__ as app_version
-
 __all__ = (
     "DiscordOAuth2API",
     "init_discord_oauth2_api",
@@ -105,7 +103,6 @@ class DiscordOAuth2API:
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
         }
 
         logger.debug(f"Exchanging token for {params}")
@@ -125,7 +122,6 @@ class DiscordOAuth2API:
 
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
         }
 
         logger.debug(f"Refreshing token for {params}")
@@ -139,7 +135,6 @@ class DiscordOAuth2API:
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
-            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
         }
 
         resp = await self._client.post(f"{BASE_URL}/users/@me", headers=headers)
@@ -152,7 +147,6 @@ class DiscordOAuth2API:
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
-            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
         }
 
         resp = await self._client.post(f"{BASE_URL}/users/@me/guilds", headers=headers)

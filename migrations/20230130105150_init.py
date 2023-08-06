@@ -39,6 +39,7 @@ from showtimes.utils import make_uuid, try_int
 CURRENT_DIR = Path(__file__).absolute().parent
 ROOT_DIR = CURRENT_DIR.parent
 logger = setup_logger(ROOT_DIR / "logs" / "migrations.log")
+_COVER_CACHE: dict[str, bytes] = {}
 
 
 # Old DB Schemas
@@ -181,7 +182,7 @@ class ShowUIDiscordMeta(BaseModel):
 class ShowtimesUISchema(Document):
     # srv_id = Field()
     # Bind the _id to mongo_id
-    user_id: str
+    server_id: str
     secret: str
     name: str | None = Field(default=None)
     privilege: ShowUIPrivilege = Field(default=ShowUIPrivilege.SERVER)
@@ -192,7 +193,7 @@ class ShowtimesUISchema(Document):
         name = "showtimesuilogin"
 
     class Config:
-        fields: dict[str, str] = {"user_id": "id", "id": "_id"}  # noqa: RUF012
+        fields: dict[str, str] = {"server_id": "id", "id": "_id"}  # noqa: RUF012
 
 
 def int_or_none(value: str | float | int | None) -> int | None:
@@ -225,13 +226,20 @@ def to_link(doc: DocT) -> Link[DocT]:
 
 
 async def _upload_poster(server_id: str, project_id: str, poster: ShowAnimePosterSchema):
+    global _COVER_CACHE
+
     stor = get_storage()
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(poster.url) as resp:
-            resp.raise_for_status()
+    logger.info(f"    Checking poster cache for {poster.url}...")
+    bytes_data = _COVER_CACHE.get(poster.url)
+    if bytes_data is None:
+        logger.info(f"     Downloading poster from {poster.url}...")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(poster.url) as resp:
+                resp.raise_for_status()
 
-            bytes_data = await resp.read()
+                bytes_data = await resp.read()
+                _COVER_CACHE[poster.url] = bytes_data
 
     poster_ext = Path(poster.url).suffix
     bytes_io = BytesIO(bytes_data)
@@ -460,8 +468,8 @@ async def _process_showtimes_project_external_data(project: ShowAnimeSchema, *, 
 
 
 async def _process_showtimes_project(
-    server_id: UUID, showanime: ShowAnimeSchema, users: UsersHolder, actors: RolesHolder, *, session
-) -> tuple[newdb.ShowProject, RolesHolder]:
+    server_id: UUID, showanime: ShowAnimeSchema, users: UsersHolder, *, session
+) -> newdb.ShowProject:
     show_id = make_uuid()
     ssposter = await _upload_poster(str(server_id), str(show_id), showanime.poster_data)
 
@@ -482,6 +490,7 @@ async def _process_showtimes_project(
 
     logger.info(f"   Processing {showanime.title}...")
     logger.info(f"   Processing {showanime.title} assigness...")
+    actors = {}
     assignment, actors = await _process_showtimes_project_assignments(
         showanime.assignments,
         users,
@@ -519,12 +528,12 @@ async def _process_showtimes_project(
     _ssproject = await newdb.ShowProject.insert_one(ssproject, session=session)
     if _ssproject is None:
         raise RuntimeError("Failed to add project")
-    return _ssproject, actors
+    return _ssproject
 
 
 async def _process_showtimes_server(
-    showtimes: ShowtimesSchema, users: UsersHolder, actors: RolesHolder, *, session
-) -> tuple[newdb.ShowtimesServer, UsersHolder, RolesHolder, ProjectHolder]:
+    showtimes: ShowtimesSchema, users: UsersHolder, *, session
+) -> tuple[newdb.ShowtimesServer, UsersHolder, ProjectHolder]:
     integrations = [
         newdb.IntegrationId(id=str(showtimes.srv_id), type=newdb.DefaultIntegrationType.DiscordGuild),
     ]
@@ -545,6 +554,7 @@ async def _process_showtimes_server(
 
     owners_list: list[newdb.ShowtimesUserGroup] = []
     logger.info("  Processing owners...")
+    session.start_transaction()
     for owner in showtimes.serverowner:
         if owner in users:
             owners_list.append(users[owner])
@@ -559,21 +569,25 @@ async def _process_showtimes_server(
                 raise RuntimeError("Failed to add user")
             users[owner] = _added_user
             owners_list.append(_added_user)
+    await session.commit_transaction()
 
     sserver_id = make_uuid()
 
     SHOW_PROJECT: ProjectHolder = {}
     logger.info(f"  Processing {len(showtimes.anime)} projects...")
     for project in showtimes.anime:
-        ssproject, actors = await _process_showtimes_project(
+        session.start_transaction()
+        ssproject = await _process_showtimes_project(
             sserver_id,
             project,
             users,
-            actors,
             session=session,
         )
         SHOW_PROJECT[str(project.id)] = ssproject
+        logger.info(f"   Committing project transaction {project.title}...")
+        await session.commit_transaction()
 
+    session.start_transaction()
     sserver = newdb.ShowtimesServer(
         name=showtimes.name or showtimes.srv_id,
         projects=[to_link(project) for project in SHOW_PROJECT.values()],
@@ -585,8 +599,10 @@ async def _process_showtimes_server(
     _sserver_new = await newdb.ShowtimesServer.insert_one(sserver, session=session)
     if _sserver_new is None:
         raise RuntimeError("Failed to add server")
+    logger.info(f" Committing to database... — {sserver.name}")
+    await session.commit_transaction()
 
-    return _sserver_new, users, actors, SHOW_PROJECT
+    return _sserver_new, users, SHOW_PROJECT
 
 
 def _deduplicates_collaboration_data(data: CollabHolder) -> CollabHolder:
@@ -670,7 +686,7 @@ class Forward:
         all_ui_info = await ShowtimesUISchema.find_all(session=session).to_list()
         logger.info("Fetching ShowAdminSchema...")
         all_owner_sets = await ShowAdminSchema.find_all(session=session).to_list()
-        all_ui_ids = [ui.user_id for ui in all_ui_info]
+        all_ui_ids = [ui.server_id for ui in all_ui_info]
 
         # Find intersects
         unregistered_ui: list[ShowAdminSchema] = []
@@ -679,8 +695,29 @@ class Forward:
                 unregistered_ui.append(owner)
 
         # Migrate intersect
-        logger.info(f"Found {len(all_ui_info)} legacy users, migrating...")
         ADDED_SHOWTIMES_USERS: UsersHolder = {}
+        if unregistered_ui:
+            logger.info(f"Found {len(unregistered_ui)} legacy users that are not registered, migrating...")
+        SERVER_TO_USERS: dict[str, list[str]] = {}
+        for missing_ui in unregistered_ui:
+            ssuser = newdb.ShowtimesTemporaryUser(
+                username=missing_ui.admin_id,
+                password="unset_" + await encrypt_password(str(make_uuid())),
+                type=newdb.ShowtimesTempUserType.MIGRATION,
+                integrations=[
+                    newdb.IntegrationId(id=str(missing_ui.admin_id), type=newdb.DefaultIntegrationType.DiscordUser)
+                ],
+            )
+            _added_user = await newdb.ShowtimesTemporaryUser.insert_one(ssuser, session=session)
+            if _added_user is None:
+                raise RuntimeError("Failed to add user")
+            ADDED_SHOWTIMES_USERS[missing_ui.admin_id] = _added_user
+            for server in missing_ui.servers:
+                if server not in SERVER_TO_USERS:
+                    SERVER_TO_USERS[server] = []
+                SERVER_TO_USERS[server].append(missing_ui.admin_id)
+        logger.info(f"Found {len(all_ui_info)} legacy servers auth, migrating...")
+        legacy_server_info: dict[str, ShowtimesUISchema] = {}
         for ui_info in all_ui_info:
             discord_meta: newdb.ShowtimesUserDiscord | None = None
             if ui_info.discord_meta:
@@ -691,53 +728,61 @@ class Forward:
                     refresh_token=ui_info.discord_meta.refresh_token,
                     expires_at=ui_info.discord_meta.expires_at,
                 )
-            password = None
-            if ui_info.user_type == ShowUIUserType.SERVER:
+            legacy_server_info[ui_info.server_id] = ui_info
+            if discord_meta is None:
+                continue
+            password: str | None = None
+            if ui_info.secret and ui_info.secret != "notset":  # noqa: S105
                 password = await encrypt_password(ui_info.secret)
             ssuser = newdb.ShowtimesUser(
-                username=ui_info.user_id,
+                username=discord_meta.id,
                 privilege=ui_info.privilege.to_newdb(),
                 password=password,
                 name=ui_info.name,
                 discord_meta=discord_meta,
                 integrations=[
-                    newdb.IntegrationId(id=str(ui_info.user_id), type=newdb.DefaultIntegrationType.DiscordUser)
+                    newdb.IntegrationId(id=str(discord_meta.id), type=newdb.DefaultIntegrationType.DiscordUser)
                 ],
             )
             _added_user = await newdb.ShowtimesUser.insert_one(ssuser, session=session)
             if _added_user is None:
                 raise RuntimeError("Failed to add user")
-            ADDED_SHOWTIMES_USERS[ui_info.user_id] = _added_user
-        if unregistered_ui:
-            logger.info(f"Found {len(unregistered_ui)} legacy users that are not registered, migrating...")
-        for missing_ui in unregistered_ui:
-            ssuser = newdb.ShowtimesTemporaryUser(
-                username=missing_ui.admin_id,
-                password="unset_" + await encrypt_password(str(make_uuid())),
-                type=newdb.ShowtimesTempUserType.MIGRATION,
-                integrations=[
-                    newdb.IntegrationId(id=str(ui_info.user_id), type=newdb.DefaultIntegrationType.DiscordUser)
-                ],
-            )
-            _added_user = await newdb.ShowtimesTemporaryUser.insert_one(ssuser, session=session)
-            if _added_user is None:
-                raise RuntimeError("Failed to add user")
-            ADDED_SHOWTIMES_USERS[missing_ui.admin_id] = _added_user
+            ADDED_SHOWTIMES_USERS[ssuser.username] = _added_user
 
-        ADDED_ROLE_ACTORS: RolesHolder = {}
-        logger.info(f"Creating default {len(ADDED_SHOWTIMES_USERS)} role actors from migrated users...")
-        for ssuser in ADDED_SHOWTIMES_USERS.values():
-            roleact = newdb.RoleActor(
-                name=getattr(ssuser, "name", None) or ssuser.username,
-                integrations=[
-                    newdb.IntegrationId(id=str(ssuser.user_id), type=newdb.DefaultIntegrationType.ShowtimesUser),
-                    newdb.IntegrationId(id=str(ssuser.username), type=newdb.DefaultIntegrationType.DiscordUser),
-                ],
-            )
-            _added_roleact = await newdb.RoleActor.insert_one(roleact, session=session)
-            if _added_roleact is None:
-                raise RuntimeError("Failed to add role actor")
-            ADDED_ROLE_ACTORS[ssuser.username] = _added_roleact
+        logger.info("Trying to do extra legacy auth migration...")
+        for server, users in SERVER_TO_USERS.items():
+            if not users:
+                continue
+            logger.info(f"Found {len(users)} legacy users for server {server}, migrating...")
+            ui_info = legacy_server_info.get(server)
+            if ui_info is None:
+                logger.warning(f"Could not find server info for {server}, skipping...")
+                continue
+            for user in users:
+                first_user = ADDED_SHOWTIMES_USERS.get(user)
+                if first_user is None:
+                    continue
+                if isinstance(first_user, newdb.ShowtimesUser):
+                    if first_user.password is None:
+                        # Set password
+                        logger.info(f"Setting password for {first_user.username}...")
+                        password = await encrypt_password(ui_info.secret)
+                        first_user.password = password
+                        await first_user.save(session=session)  # type: ignore
+                        ADDED_SHOWTIMES_USERS[first_user.username] = first_user
+                        break
+                    continue
+                elif isinstance(first_user, newdb.ShowtimesTemporaryUser):
+                    # Migrate to full user
+                    logger.info(f"Migrating {first_user.username} to full user...")
+                    new_user = first_user.to_user(await encrypt_password(ui_info.secret), persist=True)
+                    await first_user.delete(session=session)  # type: ignore
+                    await newdb.ShowtimesUser.insert_one(new_user, session=session)
+                    ADDED_SHOWTIMES_USERS[new_user.username] = new_user
+                    break
+
+        logger.info("Committing users transaction...")
+        await session.commit_transaction()
 
         logger.info("Migrating ShowtimesSchema...")
         ADDED_SHOWTIMES_PROJECTS: dict[str, dict[str, newdb.ShowProject]] = {}
@@ -748,12 +793,10 @@ class Forward:
             (
                 added_server,
                 ADDED_SHOWTIMES_USERS,
-                ADDED_ROLE_ACTORS,
                 projects,
             ) = await _process_showtimes_server(
                 legacy_server,
                 ADDED_SHOWTIMES_USERS,
-                ADDED_ROLE_ACTORS,
                 session=session,
             )
 
@@ -767,6 +810,7 @@ class Forward:
                     PENDING_COLLAB.setdefault(legacy_server.srv_id, []).append((legacy_proj.id, legacy_proj.kolaborasi))
 
         logger.info("Migrating ShowtimesCollabConfirmSchema...")
+        session.start_transaction()
         for target_srv_id, src_pending in PENDING_CONFIRM.items():
             target_srv = ADDED_SHOWTIMES_SERVERS.get(target_srv_id)
             if target_srv is None:
@@ -852,6 +896,9 @@ class Forward:
                 _cres = await newdb.ShowtimesCollaborationLinkSync.insert_one(collab_link, session=session)
                 if _cres is None:
                     raise RuntimeError("Failed to add collaboration link")
+
+        logger.info("Committing collaboration data...")
+        await session.commit_transaction()
 
         logger.info("Creating Meilisearch index...")
         search_srv_docs: list[ServerSearch] = []

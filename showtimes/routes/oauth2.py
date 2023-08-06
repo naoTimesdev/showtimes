@@ -17,7 +17,7 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from typing import Annotated, cast
-from urllib.parse import quote, unquote
+from urllib.parse import ParseResult, parse_qs, quote, unquote, urlencode, urlparse
 
 import httpx
 import pendulum
@@ -29,7 +29,7 @@ from fastapi.responses import RedirectResponse
 
 from showtimes.controllers.oauth2.discord import DiscordStateExchange, get_discord_oauth2_api
 from showtimes.controllers.redisdb import get_redis
-from showtimes.controllers.sessions.handler import get_session_handler
+from showtimes.controllers.sessions.handler import UserSessionWithToken, get_session_handler
 from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.graphql.mutations.users import mutate_login_user
@@ -187,9 +187,25 @@ async def oauth2_discord_token_exchange(code: str, state: str):
 
     await user_db.save()  # type: ignore
 
-    session = get_session_handler()
-    response_object = RedirectResponse(state_data["final_redirect"], status_code=302)
-    await session.set_session(UserSession.from_db(user_db), response_object)
+    handler = get_session_handler()
+    # Add parameters to the final redirect URL
+    final_redirect = state_data["final_redirect"]
+    parsed_redirect = urlparse(final_redirect)
+    query_params = parse_qs(parsed_redirect.query)
+    session_token = UserSession.from_db(user_db)
+    session_token = UserSessionWithToken.from_session(session_token, handler.sign_session(session_token.session_id))
+    query_params["token"] = [session_token.token]
+    parsed_query_params = urlencode(query_params, doseq=True)
+    reparsed = ParseResult(
+        parsed_redirect.scheme,
+        parsed_redirect.netloc,
+        parsed_redirect.path,
+        parsed_redirect.params,
+        parsed_query_params,
+        parsed_redirect.fragment,
+    )
+    response_object = RedirectResponse(reparsed.geturl(), status_code=302)
+    await handler.set_session(session_token, response_object)
     return response_object
 
 

@@ -7,4 +7,4 @@ Extension or extra codes for modules that we are using.
 :license: AGPL-3.0, see LICENSE for more details.
 """
 
-from . import fastapi, graphql, monkeypatch
+from . import fastapi, graphql

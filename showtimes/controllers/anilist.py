@@ -17,21 +17,19 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from math import ceil
-from typing import TYPE_CHECKING, Optional, cast
+from typing import Optional, cast
 
-import aiohttp
+import httpx
 import pendulum
 from pendulum.datetime import DateTime
 
 from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.models.anilist import AnilistFuzzyDate
 
+from .._metadata import __version__
 from ..utils import complex_walk
 from .gqlapi import GraphQLClient, GraphQLResult, PredicateFunc
 from .ratelimiter import NetworkRateLimiter
-
-if TYPE_CHECKING:
-    from multidict import CIMultiDictProxy
 
 __all__ = (
     "AnilistAPI",
@@ -51,7 +49,7 @@ class AnilistAPI:
 
     BASE_API = "https://graphql.anilist.co"
 
-    def __init__(self, session: aiohttp.ClientSession, rate_limit: int = 90):
+    def __init__(self, session: httpx.AsyncClient, rate_limit: int = 90):
         self._sesi = session
 
         self._limiter = NetworkRateLimiter(rate_limit, 60)
@@ -61,9 +59,9 @@ class AnilistAPI:
         self._requester = GraphQLClient(self.BASE_API, session)
 
     async def close(self):
-        await self._sesi.close()
+        await self._sesi.aclose()
 
-    def _handle_x_rate_headers(self, headers: "CIMultiDictProxy[str]"):
+    def _handle_x_rate_headers(self, headers: httpx.Headers):
         limit = headers.get("X-RateLimit-Limit")
         remaining = headers.get("X-RateLimit-Remaining")
         reset = headers.get("X-RateLimit-Reset")
@@ -130,11 +128,13 @@ def get_anilist_client():
     return _ANILIST_CLIENT
 
 
-async def init_anilist_client(session: aiohttp.ClientSession | None = None):
+async def init_anilist_client(session: httpx.AsyncClient | None = None):
     global _ANILIST_CLIENT
 
     if _ANILIST_CLIENT is None:
-        session = session or aiohttp.ClientSession()
+        session = session or httpx.AsyncClient(
+            headers={"User-Agent": f"Showtimes/v{__version__} (+https://github.com/naoTimesdev/showtimes)"}
+        )
         _ANILIST_CLIENT = AnilistAPI(session)
 
 

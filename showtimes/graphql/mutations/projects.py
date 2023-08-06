@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Literal, TypeAlias, TypeVar, cast
 from uuid import UUID
 
-import aiohttp
+import httpx
 import pendulum
 import strawberry as gql
 from beanie.operators import And as OpAnd
@@ -566,11 +566,11 @@ async def mutate_project_add(
     else:
         if source_info.poster_url:
             logger.debug(f"[{server_info.server_id}][{project_id}] Downloading poster from source...")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(source_info.poster_url) as resp:
-                    resp.raise_for_status()
+            async with httpx.AsyncClient() as session:
+                resp = await session.get(source_info.poster_url)
+                resp.raise_for_status()
 
-                    bytes_data = await resp.read()
+                bytes_data = await resp.aread()
 
             file_ext = Path(source_info.poster_url).suffix
             bytes_io = BytesIO(bytes_data)

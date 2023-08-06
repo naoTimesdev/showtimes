@@ -18,18 +18,19 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict, TypeVar
 
-import aiohttp
+import httpx
+import orjson
 
+from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.models.abstract import AttributeDict
 from showtimes.tooling import get_env_config
 
 from ..._metadata import __version__ as app_version
 
 __all__ = (
-    "discord_exchange_token",
-    "discord_refresh_token",
-    "discord_get_user_info",
-    "discord_get_user_guilds",
+    "DiscordOAuth2API",
+    "init_discord_oauth2_api",
+    "get_discord_oauth2_api",
 )
 env_conf = get_env_config()
 
@@ -86,80 +87,94 @@ class DiscordAPIPartialGuild(AttributeDict):
     features: list[str]
 
 
-async def discord_exchange_token(code: str, state_data: DiscordStateExchange) -> ResponseT[DiscordToken]:
-    if DISCORD_ID is None or DISCORD_SECRET is None:
-        return None, "Discord client is unavailable."
+class DiscordOAuth2API:
+    def __init__(self, *, session: httpx.AsyncClient | None = None) -> None:
+        if DISCORD_ID is None or DISCORD_SECRET is None:
+            raise RuntimeError("Discord client is unavailable.")
+        self._client = session or httpx.AsyncClient()
 
-    params = {
-        "client_id": DISCORD_ID,
-        "client_secret": DISCORD_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": state_data["redirect_uri"],
-    }
+    async def exchange_token(self, code: str, state_data: DiscordStateExchange) -> ResponseT[DiscordToken]:
+        params = {
+            "client_id": DISCORD_ID,
+            "client_secret": DISCORD_SECRET,
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": state_data["redirect_uri"],
+        }
 
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
-    }
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
+        }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(f"{BASE_URL}/oauth2/token", data=params, headers=headers) as resp:
-            resp.raise_for_status()
+        resp = await self._client.post(f"{BASE_URL}/oauth2/token", data=params, headers=headers)
+        resp.raise_for_status()
 
-            resp_data = DiscordToken(await resp.json())
-            return resp_data, "Successfully exchanged token."
+        resp_data = DiscordToken(orjson.loads(await resp.aread()))
+        return resp_data, "Successfully exchanged token."
+
+    async def refresh_token(self, refresh_token: str) -> ResponseT[DiscordToken]:
+        params = {
+            "client_id": DISCORD_ID,
+            "client_secret": DISCORD_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
+        }
+
+        resp = await self._client.post(f"{BASE_URL}/oauth2/token", data=params, headers=headers)
+        resp.raise_for_status()
+
+        resp_data = DiscordToken(orjson.loads(await resp.aread()))
+        return resp_data, "Successfully refreshed token."
+
+    async def get_user(self, token: str) -> ResponseT[DiscordAPIUser]:
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
+        }
+
+        resp = await self._client.post(f"{BASE_URL}/users/@me", headers=headers)
+        resp.raise_for_status()
+
+        resp_data = DiscordAPIUser(orjson.loads(await resp.aread()))
+        return resp_data, "Success"
+
+    async def get_guilds(self, token: str) -> ResponseListT[DiscordAPIPartialGuild]:
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
+        }
+
+        resp = await self._client.post(f"{BASE_URL}/users/@me/guilds", headers=headers)
+        resp.raise_for_status()
+
+        resp_data = [DiscordAPIPartialGuild(guild) for guild in orjson.loads(await resp.aread())]
+        return resp_data, "Success"
 
 
-async def discord_refresh_token(refresh_token: str) -> ResponseT[DiscordToken]:
-    if DISCORD_ID is None or DISCORD_SECRET is None:
-        return None, "Discord client is unavailable."
-
-    params = {
-        "client_id": DISCORD_ID,
-        "client_secret": DISCORD_SECRET,
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-    }
-
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
-    }
-
-    async with aiohttp.ClientSession() as session:
-        async with session.post(f"{BASE_URL}/oauth2/token", data=params, headers=headers) as resp:
-            resp.raise_for_status()
-
-            resp_data = DiscordToken(await resp.json())
-            return resp_data, "Successfully exchanged token."
+_DISCORD_CLIENT = DiscordOAuth2API()
 
 
-async def discord_get_user_info(token: str) -> ResponseT[DiscordAPIUser]:
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-        "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
-    }
+async def init_discord_oauth2_api() -> DiscordOAuth2API:
+    global _DISCORD_CLIENT
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(f"{BASE_URL}/users/@me", headers=headers) as resp:
-            resp.raise_for_status()
+    if _DISCORD_CLIENT is None:
+        _DISCORD_CLIENT = DiscordOAuth2API()
 
-            resp_data = DiscordAPIUser(await resp.json())
-            return resp_data, "Success"
+    return _DISCORD_CLIENT
 
 
-async def discord_get_user_guilds(token: str) -> ResponseListT[DiscordAPIPartialGuild]:
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-        "User-Agent": f"Showtimes-API/{app_version} (+https://github.com/naoTimesdev/showtimes)",
-    }
+def get_discord_oauth2_api() -> DiscordOAuth2API:
+    global _DISCORD_CLIENT
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(f"{BASE_URL}/users/@me/guilds", headers=headers) as resp:
-            resp.raise_for_status()
+    if _DISCORD_CLIENT is None:
+        raise ShowtimesControllerUninitializedError("Discord OAuth2 API")
 
-            resp_data = [DiscordAPIPartialGuild(guild) for guild in await resp.json()]
-            return resp_data, "Success"
+    return _DISCORD_CLIENT

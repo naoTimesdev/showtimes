@@ -46,7 +46,6 @@ from showtimes.extensions.fastapi.lock import get_ready_status
 from showtimes.extensions.fastapi.responses import ORJSONXResponse, ResponseType
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.router import SessionGraphQLRouter
-from showtimes.extensions.monkeypatch.aiohttp import monkeypatch_aiohttp_tcp_ssl_certifi
 from showtimes.graphql.schema import make_schema
 from showtimes.utils import to_boolean, try_int
 
@@ -62,7 +61,6 @@ __all__ = (
 CURRENT_DIR = Path(__file__).absolute().parent
 ROOT_DIR = CURRENT_DIR.parent
 TEMPLATE_DIR = CURRENT_DIR / "templates"
-monkeypatch_aiohttp_tcp_ssl_certifi()
 _GlobalLogger = setup_logger(ROOT_DIR / "logs" / "server.log")
 
 

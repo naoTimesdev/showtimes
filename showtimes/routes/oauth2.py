@@ -19,22 +19,21 @@ from __future__ import annotations
 from typing import Annotated, cast
 from urllib.parse import quote, unquote
 
-import aiohttp
+import httpx
 import pendulum
+from beanie.operators import Eq as OpEq
+from beanie.operators import Or as OpOr
 from fastapi import APIRouter, Depends, Request
 from fastapi.datastructures import Default
 from fastapi.responses import RedirectResponse
 
-from showtimes.controllers.oauth2.discord import (
-    DiscordStateExchange,
-    discord_exchange_token,
-    discord_get_user_info,
-)
+from showtimes.controllers.oauth2.discord import DiscordStateExchange, get_discord_oauth2_api
 from showtimes.controllers.redisdb import get_redis
 from showtimes.controllers.sessions.handler import get_session_handler
+from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.graphql.mutations.users import mutate_login_user
-from showtimes.models.database import ShowtimesUser, ShowtimesUserDiscord, UserType
+from showtimes.models.database import DefaultIntegrationType, ShowtimesUser, ShowtimesUserDiscord, UserType
 from showtimes.models.session import UserSession
 from showtimes.tooling import get_env_config
 from showtimes.utils import generate_custom_code
@@ -139,22 +138,35 @@ async def oauth2_discord_token_exchange(code: str, state: str):
         raise ShowtimesException(400, "Invalid state parameter.")
 
     try:
-        exchange_tok, error = await discord_exchange_token(code, state_data)
-    except aiohttp.ClientResponseError as e:
-        raise ShowtimesException(500, f"Failed to authorize Discord code: {e.message}") from e
+        oauth_api = get_discord_oauth2_api()
+    except ShowtimesControllerUninitializedError as e:
+        raise ShowtimesException(500, "Discord OAuth2 controller is unavailable.") from e
+
+    try:
+        exchange_tok, error = await oauth_api.exchange_token(code, state_data)
+    except httpx.HTTPStatusError as e:
+        raise ShowtimesException(500, f"Failed to authorize Discord code: {e}") from e
 
     if exchange_tok is None:
         raise ShowtimesException(500, f"Failed to authorize Discord code: {error}")
 
     try:
-        user_info, error = await discord_get_user_info(exchange_tok.access_token)
-    except aiohttp.ClientResponseError as e:
-        raise ShowtimesException(500, f"Failed to get user info: {e.message}") from e
+        user_info, error = await oauth_api.get_user(exchange_tok.access_token)
+    except httpx.HTTPStatusError as e:
+        raise ShowtimesException(500, f"Failed to get user info: {e}") from e
 
     if user_info is None:
         raise ShowtimesException(500, f"Failed to get user info: {error}")
 
-    user_db = await ShowtimesUser.find_one(ShowtimesUser.username == str(user_info.id))
+    user_db = await ShowtimesUser.find_one(
+        OpOr(
+            OpEq("discord_meta.id", str(user_info.id)),
+            {
+                "integrations.id": str(user_info.id),
+                "integrations.type": DefaultIntegrationType.DiscordUser,
+            },
+        )
+    )
     expires_at = pendulum.now(tz="UTC").add(seconds=exchange_tok.expires_in)
 
     if user_db is None:

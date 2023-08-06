@@ -18,11 +18,13 @@ from __future__ import annotations
 
 from typing import Type, TypeVar
 
-import aiohttp
+import httpx
 import msgspec
 
 from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.models.tmdb import TMDBErrorResponse, TMDBMultiResponse
+
+from .._metadata import __version__
 
 __all__ = (
     "TMDbAPI",
@@ -35,13 +37,13 @@ RespT = TypeVar("RespT", bound=msgspec.Struct)
 class TMDbAPI:
     BASE_URL = "https://api.themoviedb.org/3"
 
-    def __init__(self, api_key: str, *, session: aiohttp.ClientSession | None = None) -> None:
+    def __init__(self, api_key: str, *, session: httpx.AsyncClient | None = None) -> None:
         self._api_key = api_key
         self._session = session
 
     async def close(self) -> None:
         if self._session:
-            await self._session.close()
+            await self._session.aclose()
 
     def _make_query(self, base_query: dict | None = None):
         base_query = base_query or {}
@@ -51,14 +53,17 @@ class TMDbAPI:
 
     async def request(self, method: str, url: str, *, type: Type[RespT], **kwargs) -> RespT | TMDBErrorResponse:
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            self._session = httpx.AsyncClient(
+                headers={"User-Agent": f"Showtimes/v{__version__} (+https://github.com/naoTimesdev/showtimes)"}
+            )
 
-        async with self._session.request(method, url, **kwargs) as resp:
-            text_data = await resp.read()
-            try:
-                return msgspec.json.decode(text_data, type=TMDBErrorResponse)
-            except msgspec.DecodeError:
-                return msgspec.json.decode(text_data, type=type)
+        resp = await self._session.request(method, url, **kwargs)
+
+        text_data = await resp.aread()
+        try:
+            return msgspec.json.decode(text_data, type=TMDBErrorResponse)
+        except msgspec.DecodeError:
+            return msgspec.json.decode(text_data, type=type)
 
     async def search(self, query: str, page: int = 1) -> TMDBMultiResponse | TMDBErrorResponse:
         """

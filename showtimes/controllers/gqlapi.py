@@ -21,7 +21,6 @@ import logging
 import traceback
 from dataclasses import dataclass
 from typing import (
-    TYPE_CHECKING,
     Any,
     AsyncGenerator,
     Awaitable,
@@ -35,15 +34,12 @@ from typing import (
     cast,
 )
 
-import aiohttp
+import httpx
 
 from .._metadata import __version__
 from ..models.abstract import AttributeDict
 from ..tooling import get_logger
 from ..utils import complex_walk
-
-if TYPE_CHECKING:
-    from multidict import CIMultiDictProxy
 
 __all__ = ("GraphQLResult", "GraphQLPaginationInfo", "GraphQLClient")
 ResultT = TypeVar("ResultT", bound="AttributeDict")
@@ -87,7 +83,7 @@ class GraphQLError:
 @dataclass
 class GraphQLResult(Generic[ResultT]):
     query: str
-    headers: "CIMultiDictProxy[str]"
+    headers: httpx.Headers
     operationName: Optional[str] = None  # noqa: N815
     data: Optional[ResultT] = None
     errors: Optional[List[GraphQLError]] = None
@@ -101,13 +97,13 @@ class GraphQLPaginationInfo:
 
 
 class GraphQLClient(Generic[ResultT]):
-    def __init__(self, endpoint: str, session: Optional[aiohttp.ClientSession] = None):
+    def __init__(self, endpoint: str, session: httpx.AsyncClient | None = None):
         self.endpoint = endpoint
         self.logger: logging.Logger = get_logger()
 
         self._outside_session = True
-        self._sesi: aiohttp.ClientSession = session or aiohttp.ClientSession(
-            headers={"User-Agent": f"Showtimes/v{__version__} (https://github.com/naoTimesdev/showtimes)"}
+        self._sesi: httpx.AsyncClient = session or httpx.AsyncClient(
+            headers={"User-Agent": f"Showtimes/v{__version__} (+https://github.com/naoTimesdev/showtimes)"}
         )
         if session is None:
             self._outside_session = False
@@ -137,33 +133,43 @@ class GraphQLClient(Generic[ResultT]):
             query_send["variables"] = variables
         if isinstance(operation_name, str) and len(operation_name.strip()) > 0:
             query_send["operationName"] = operation_name
-        async with self._sesi.post(self.endpoint, json=query_send) as resp:
-            try:
-                json_data = await resp.json()
-                get_data = cast(Any, complex_walk(json_data, "data"))
-                errors = cast(list[GraphQLErrorDict], complex_walk(json_data, "errors"))
-                if not isinstance(errors, list):
-                    errors = []
-                all_errors = []
-                for error in errors:
-                    msg = error.get("message", "")
-                    error_loc = cast(GraphQLErrorLocationDict | None, complex_walk(cast(dict, error), "locations.0"))
-                    if error_loc is not None:
-                        error_loc = GraphQLErrorLocation(error_loc.get("line", -1), error_loc.get("column", -1))
-                    stack_code = cast(Optional[str], complex_walk(cast(dict, error), "extensions.code"))
-                    all_errors.append(GraphQLError(msg, error_loc, stack_code))
-                return GraphQLResult(
-                    query, resp.headers, operation_name, self._convert_data(get_data), all_errors, resp.status
-                )
-            except Exception:
-                self.logger.error("An exception occured!\n%s", traceback.format_exc())
-                return GraphQLResult(
-                    query,
-                    resp.headers,
-                    operation_name,
-                    None,
-                    [GraphQLError("Failed to parse JSON file", code="50000")],
-                )
+        try:
+            resp = await self._sesi.post(self.endpoint, json=query_send)
+        except httpx.RequestError:
+            self.logger.error("An exception occured!\n%s", traceback.format_exc())
+            return GraphQLResult(
+                query,
+                httpx.Headers(encoding="utf-8"),
+                operation_name,
+                None,
+                [GraphQLError("Failed to connect to GraphQL API", code="50000")],
+            )
+        try:
+            json_data = await resp.json()
+            get_data = cast(Any, complex_walk(json_data, "data"))
+            errors = cast(list[GraphQLErrorDict], complex_walk(json_data, "errors"))
+            if not isinstance(errors, list):
+                errors = []
+            all_errors = []
+            for error in errors:
+                msg = error.get("message", "")
+                error_loc = cast(GraphQLErrorLocationDict | None, complex_walk(cast(dict, error), "locations.0"))
+                if error_loc is not None:
+                    error_loc = GraphQLErrorLocation(error_loc.get("line", -1), error_loc.get("column", -1))
+                stack_code = cast(Optional[str], complex_walk(cast(dict, error), "extensions.code"))
+                all_errors.append(GraphQLError(msg, error_loc, stack_code))
+            return GraphQLResult(
+                query, resp.headers, operation_name, self._convert_data(get_data), all_errors, resp.status_code
+            )
+        except Exception:
+            self.logger.error("An exception occured!\n%s", traceback.format_exc())
+            return GraphQLResult(
+                query,
+                resp.headers,
+                operation_name,
+                None,
+                [GraphQLError("Failed to parse JSON file", code="50000")],
+            )
 
     async def _execute_predicate(self, predicate: PredicateFunc, content: Optional[ResultT] = None) -> PredicateResult:
         """Execute the predicate function and return the result"""
@@ -192,4 +198,4 @@ class GraphQLClient(Generic[ResultT]):
 
     async def close(self):
         if not self._outside_session:
-            await self._sesi.close()
+            await self._sesi.aclose()

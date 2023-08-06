@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, TypeAlias, TypeVar
 from uuid import UUID
 
-import aiohttp
+import httpx
 import pendulum
 from beanie import Document, Link, free_fall_migration
 from pendulum.datetime import DateTime
@@ -234,12 +234,12 @@ async def _upload_poster(server_id: str, project_id: str, poster: ShowAnimePoste
     bytes_data = _COVER_CACHE.get(poster.url)
     if bytes_data is None:
         logger.info(f"     Downloading poster from {poster.url}...")
-        async with aiohttp.ClientSession() as session:
-            async with session.get(poster.url) as resp:
-                resp.raise_for_status()
+        async with httpx.AsyncClient() as session:
+            resp = await session.get(poster.url)
+            resp.raise_for_status()
 
-                bytes_data = await resp.read()
-                _COVER_CACHE[poster.url] = bytes_data
+            bytes_data = await resp.aread()
+            _COVER_CACHE[poster.url] = bytes_data
 
     poster_ext = Path(poster.url).suffix
     bytes_io = BytesIO(bytes_data)
@@ -263,7 +263,7 @@ async def _upload_poster(server_id: str, project_id: str, poster: ShowAnimePoste
             type="project",
             key=server_id,
             parent=project_id,
-            filename=f"poster{poster_ext}",
+            filename=f"poster.{poster_ext}",
             format=poster_ext,
         ),
         color=int_or_none(poster.color),

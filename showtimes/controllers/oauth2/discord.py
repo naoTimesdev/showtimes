@@ -137,7 +137,7 @@ class DiscordOAuth2API:
             "Accept": "application/json",
         }
 
-        resp = await self._client.post(f"{BASE_URL}/users/@me", headers=headers)
+        resp = await self._client.get(f"{BASE_URL}/users/@me", headers=headers)
         resp.raise_for_status()
 
         resp_data = DiscordAPIUser(orjson.loads(await resp.aread()))
@@ -149,7 +149,7 @@ class DiscordOAuth2API:
             "Accept": "application/json",
         }
 
-        resp = await self._client.post(f"{BASE_URL}/users/@me/guilds", headers=headers)
+        resp = await self._client.get(f"{BASE_URL}/users/@me/guilds", headers=headers)
         resp.raise_for_status()
 
         resp_data = [DiscordAPIPartialGuild(guild) for guild in orjson.loads(await resp.aread())]

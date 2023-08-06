@@ -353,7 +353,7 @@ async def update_server_searchdb(server: ShowtimesServer) -> None:
     servers = ServerSearch.from_db(server)
     project_ids = await query_aggregate_project_ids([project.ref.id for project in server.projects])
     servers.projects = [str(project.show_id) for project in project_ids]
-    await searcher.update_document(ServerSearch.from_db(server))
+    await searcher.update_document(servers)
 
 
 async def _process_input_integration(integrations: list[IntegrationInputGQL] | None):

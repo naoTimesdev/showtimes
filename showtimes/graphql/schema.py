@@ -35,7 +35,7 @@ from showtimes.extensions.graphql.scalars import UUID as UUIDGQL
 from showtimes.extensions.graphql.scalars import UNIXTimestamp
 from showtimes.extensions.graphql.scalars import Upload as UploadGQL
 from showtimes.graphql.cursor import Cursor
-from showtimes.graphql.models.common import KeyValueGQL
+from showtimes.graphql.models.common import IntegrationInputGQL, KeyValueGQL
 from showtimes.graphql.models.fallback import NodeResult
 from showtimes.graphql.models.notification import NotificationGQL
 from showtimes.graphql.models.pagination import Connection, SortDirection
@@ -63,8 +63,8 @@ from .mutations.users import (
     mutate_migrate_user,
     mutate_migrate_user_approve,
     mutate_register_user,
-    mutate_register_user_approve,
     mutate_reset_password,
+    mutate_user_bind_integrations,
 )
 from .queries.search import QuerySearch
 from .queries.showtimes import (
@@ -297,34 +297,24 @@ class Mutation:
     @gql.mutation(description="Register to Showtimes")
     async def register(
         self, username: str, password: str, info: Info[SessionQLContext, None]
-    ) -> Union[UserTemporaryGQL, Result]:
+    ) -> Union[UserGQL, Result]:
         if info.context.user is not None:
             return Result(success=False, message="You are already logged in", code=ErrorCode.SessionExist)
         success, user, code = await mutate_register_user(username, password)
         if not success and isinstance(user, str):
             return Result(success=False, message=user, code=code)
-        user_info = cast(UserTemporaryGQL, user)
-        return user_info
+        return cast(UserGQL, user)
 
-    @gql.mutation(description="Approve a user registration")
-    async def approve_register(
-        self, username: str, password: str, code: str, info: Info[SessionQLContext, None]
+    @gql.mutation(description="Bind integrations to a user")
+    async def bind(
+        self, username: str, password: str, integrations: list[IntegrationInputGQL], info: Info[SessionQLContext, None]
     ) -> Union[UserGQL, Result]:
-        if info.context.user is None:
-            return Result(success=False, message="You are not logged in", code=ErrorCode.SessionUnknown)
-
-        if not is_master_session(info.context.user):
-            return Result(
-                success=False,
-                message="You are not allowed to approve a user registration",
-                code=ErrorCode.SessionNotMaster,
-            )
-
-        success, user, err_code = await mutate_register_user_approve(username, password, code)
+        if info.context.user is not None:
+            return Result(success=False, message="You are already logged in", code=ErrorCode.SessionExist)
+        success, user, code = await mutate_user_bind_integrations(username, password, integrations)
         if not success and isinstance(user, str):
-            return Result(success=False, message=user, code=err_code)
-        user_info = cast(UserGQL, user)
-        return user_info
+            return Result(success=False, message=user, code=code)
+        return UserGQL.from_db(cast(ShowtimesUser, user))
 
     @gql.mutation(description="Migrate user to new Showtimes")
     async def migrate(

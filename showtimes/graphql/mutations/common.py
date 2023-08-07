@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 from uuid import UUID
 
+import strawberry as gql
 from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
 from bson import ObjectId
@@ -27,9 +28,11 @@ from pydantic import BaseModel
 from showtimes.controllers.searcher import get_searcher
 from showtimes.controllers.storages import get_storage
 from showtimes.graphql.models.common import IntegrationInputGQL
+from showtimes.graphql.models.enums import IntegrationInputActionGQL
 from showtimes.graphql.models.fallback import ErrorCode, Result
 from showtimes.models.database import (
     DefaultIntegrationType,
+    IntegrationId,
     RoleActor,
     ShowProject,
     ShowtimesCollaborationLinkSync,
@@ -43,6 +46,7 @@ from showtimes.tooling import get_logger
 __all__ = (
     "raise_for_invalid_integrations",
     "async_raise_for_invalid_integrations",
+    "process_input_integration",
     "query_aggregate_project_ids",
     "common_mutate_project_delete",
     "delete_project_searchdb",
@@ -66,6 +70,23 @@ def raise_for_invalid_integrations(integrations: list[IntegrationInputGQL]):
 async def async_raise_for_invalid_integrations(integrations: list[IntegrationInputGQL]):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, raise_for_invalid_integrations, integrations)
+
+
+async def process_input_integration(
+    integrations: list[IntegrationInputGQL] | None, actions: list[IntegrationInputActionGQL]
+) -> list[IntegrationId]:
+    if integrations is None:
+        return []
+    if integrations is gql.UNSET:
+        return []
+
+    await async_raise_for_invalid_integrations(integrations)
+
+    return [
+        IntegrationId(id=integration.id, type=integration.type)
+        for integration in integrations
+        if integration.action in actions
+    ]
 
 
 async def query_aggregate_project_ids(project_ids: list[ObjectId]):

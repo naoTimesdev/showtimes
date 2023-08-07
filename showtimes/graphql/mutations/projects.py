@@ -86,11 +86,7 @@ from showtimes.models.timeseries import TimeSeriesProjectEpisodeChanges
 from showtimes.tooling import get_logger
 from showtimes.utils import complex_walk, make_uuid
 
-from .common import (
-    async_raise_for_invalid_integrations,
-    common_mutate_project_delete,
-    query_aggregate_project_ids,
-)
+from .common import common_mutate_project_delete, process_input_integration, query_aggregate_project_ids
 
 __all__ = (
     "mutate_project_add",
@@ -356,21 +352,6 @@ async def update_server_searchdb(server: ShowtimesServer) -> None:
     await searcher.update_document(servers)
 
 
-async def _process_input_integration(integrations: list[IntegrationInputGQL] | None):
-    if integrations is None:
-        return []
-    if integrations is gql.UNSET:
-        return []
-
-    await async_raise_for_invalid_integrations(integrations)
-
-    return [
-        IntegrationId(id=integration.id, type=integration.type)
-        for integration in integrations
-        if integration.action == IntegrationInputActionGQL.ADD
-    ]
-
-
 async def _find_project(project_id: UUID, owner_id: str | None = None) -> Result | tuple[ShowProject, ShowtimesServer]:
     logger.info(f"Finding project for {project_id}")
 
@@ -494,7 +475,10 @@ async def mutate_project_add(
 
             ainfo: RoleActor | None = None
             if isinstance(assignee.info, ProjectInputAssigneeInfoGQL):
-                integrations = await _process_input_integration(assignee.info.integrations)
+                integrations = await process_input_integration(
+                    assignee.info.integrations,
+                    [IntegrationInputActionGQL.ADD, IntegrationInputActionGQL.UPSERT],
+                )
                 if assignee.info.id in added_actor:
                     ainfo = added_actor[assignee.info.id]
                     # Update integrations
@@ -620,7 +604,10 @@ async def mutate_project_add(
         assignments=use_assignee,
         statuses=statuses,
         show_id=project_id,
-        integrations=await _process_input_integration(input_data.integrations),
+        integrations=await process_input_integration(
+            input_data.integrations,
+            [IntegrationInputActionGQL.ADD, IntegrationInputActionGQL.UPSERT],
+        ),
         aliases=project_aliases,
         type=source_info.format,
     )
@@ -664,6 +651,8 @@ async def mutate_project_update(
                 add_integrations.append(integration)
             elif integration.action == IntegrationInputActionGQL.DELETE:
                 remove_integrations.append(integration)
+            elif integration.action == IntegrationInputActionGQL.UPSERT:
+                modify_integrations.append(integration)
 
         if add_integrations:
             save_changes = True
@@ -723,7 +712,15 @@ async def mutate_project_update(
                             old_assignee.actor = None
                             save_changes = True
                         elif assignee_new.info is not None and old_assignee.actor is None:
-                            integrations = await _process_input_integration(assignee_new.info.integrations)
+                            integrations = await process_input_integration(
+                                assignee_new.info.integrations,
+                                [
+                                    IntegrationInputActionGQL.ADD,
+                                    IntegrationInputActionGQL.UPSERT,
+                                    IntegrationInputActionGQL.DELETE,
+                                ],
+                            )
+
                             preext = preexisting_assigness.get(assignee_new.info.id)
                             if preext is not None:
                                 # Update integrations

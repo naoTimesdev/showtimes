@@ -20,6 +20,7 @@ import asyncio
 from datetime import datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable, TypeAlias
 
+from showtimes.models.pubsub import PubSubType
 from showtimes.tooling import get_logger
 from showtimes.utils import make_uuid
 
@@ -119,9 +120,11 @@ class PubSubHandler:
                 logger.debug(f"Removing {identifier} from {topic}")
                 self._message_handler[topic].pop(idx_del)
 
-    def subscribe(self, topic: str) -> MessageHandler:
+    def subscribe(self, topic: PubSubType | str) -> MessageHandler:
         if self._lock_close:
             raise RuntimeError("PubSub is closing")
+        if isinstance(topic, PubSubType):
+            topic = topic.value
         if topic not in self._message_handler:
             self._message_handler[topic] = []
 

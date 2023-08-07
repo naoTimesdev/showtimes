@@ -26,8 +26,8 @@ from showtimes.controllers.pubsub import get_pubsub
 from showtimes.extensions.graphql.scalars import DateTime
 from showtimes.graphql.models.partials import PartialProjectGQL, PartialServerGQL, ProjectStatusGQL
 from showtimes.models.database import ShowProject, ShowtimesServer
+from showtimes.models.pubsub import PubSubType
 from showtimes.models.timeseries import (
-    PubSubType,
     TimeSeriesProjectDelete,
     TimeSeriesProjectEpisodeChanges,
     TimeSeriesServerDelete,

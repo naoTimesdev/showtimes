@@ -10,6 +10,7 @@ The models of Showtimes Backend Project.
 from .abstract import *
 from .anilist import *
 from .database import *
+from .notification import *
 from .searchdb import *
 from .session import *
 from .timeseries import *

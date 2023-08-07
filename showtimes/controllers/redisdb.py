@@ -20,10 +20,12 @@ import asyncio
 import logging
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union, overload
 
+import msgspec
 import orjson
 from bson import ObjectId
+from msgspec import Struct
 from redis import asyncio as aioredis
 
 from showtimes.errors import ShowtimesControllerUninitializedError
@@ -33,6 +35,9 @@ __all__ = (
     "init_redis_client",
     "get_redis",
 )
+
+FT = TypeVar("FT")
+StructT = TypeVar("StructT", bound="Struct")
 
 
 def ObjectIdEncoder(obj: Any):  # noqa: N802
@@ -146,6 +151,8 @@ class RedisDatabase:
             data = "b2dntcode_" + data
         elif isinstance(data, int):
             data = str(data)
+        elif isinstance(data, Struct):
+            data = msgspec.json.encode(data)
         elif isinstance(data, (list, tuple, dict)):
             data = orjson.dumps(data, default=ObjectIdEncoder).decode("utf-8")
         return data
@@ -164,7 +171,7 @@ class RedisDatabase:
         except ValueError:
             return data
 
-    def to_original(self, data: Optional[bytes]) -> Optional[Any]:
+    def to_original(self, data: Optional[bytes], *, type: Type[StructT] | None = None) -> Optional[Any]:
         """Convert back data to the possible original data types
 
         For bytes, you need to prepend with `b2dntcode_`
@@ -186,6 +193,12 @@ class RedisDatabase:
         if parsed.startswith("b2dntcode_"):
             parsed = parsed[10:]
             return parsed.encode("utf-8")
+        if type is not None:
+            try:
+                parsed = msgspec.json.decode(parsed, type=type)
+                return parsed
+            except msgspec.DecodeError:
+                pass
         try:
             parsed = orjson.loads(parsed)
         except ValueError:
@@ -229,7 +242,25 @@ class RedisDatabase:
         await self._pool.disconnect()
         self.logger.info("All connection closed")
 
-    async def get(self, key: str, fallback: Any = None) -> Any:
+    @overload
+    async def get(self, key: str) -> Any | None:
+        ...
+
+    @overload
+    async def get(self, key: str, fallback: FT) -> Any | FT:
+        ...
+
+    @overload
+    async def get(self, key: str, *, type: Type[StructT]) -> StructT | None:
+        ...
+
+    @overload
+    async def get(self, key: str, fallback: FT, *, type: Type[StructT]) -> StructT | FT:
+        ...
+
+    async def get(
+        self, key: str, fallback: FT | None = None, *, type: Type[StructT] | None = None
+    ) -> Any | FT | StructT | None:
         """Get a key from the database
 
         :param key: The key of the object
@@ -243,7 +274,7 @@ class RedisDatabase:
         async with self.lock_env("get"):
             try:
                 res = await self._conn.get(key)
-                res = self.to_original(res)
+                res = self.to_original(res, type=type)
                 if res is None:
                     res = fallback
             except aioredis.RedisError:
@@ -271,7 +302,15 @@ class RedisDatabase:
         all_keys = [key.decode("utf-8") for key in all_keys]
         return all_keys
 
+    @overload
     async def getall(self, pattern: str) -> List[Any]:
+        ...
+
+    @overload
+    async def getall(self, pattern: str, *, type: Type[StructT]) -> List[StructT]:
+        ...
+
+    async def getall(self, pattern: str, *, type: Type[StructT] | None = None) -> List[Any]:
         """Get all values that match the key pattern
 
         Example return format: `["value_of_it", "another_value"]`

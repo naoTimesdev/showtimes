@@ -37,6 +37,7 @@ from showtimes.extensions.graphql.scalars import Upload as UploadGQL
 from showtimes.graphql.cursor import Cursor
 from showtimes.graphql.models.common import KeyValueGQL
 from showtimes.graphql.models.fallback import NodeResult
+from showtimes.graphql.models.notification import NotificationGQL
 from showtimes.graphql.models.pagination import Connection, SortDirection
 from showtimes.graphql.models.projects import ProjectEpisodeInput, ProjectGQL, ProjectInputGQL
 from showtimes.graphql.models.servers import ServerGQL, ServerInputGQL
@@ -74,6 +75,7 @@ from .queries.showtimes import (
     resolve_server_statistics,
     resolve_servers_fetch_paginated,
 )
+from .subscriptions.notification import subs_notification
 from .subscriptions.showtimes import (
     ProjectEpisodeUpdateSubs,
     SubsResponse,
@@ -670,6 +672,22 @@ class Subscription:
             )
 
         async for payload in subs_showtimes_project_delete(model_id=model_id):
+            yield payload
+
+    @gql.subscription(description="Subscribe to Notification")
+    async def notification(
+        self,
+        info: Info[SessionQLContext, None],
+    ) -> AsyncGenerator[NotificationGQL, None]:
+        if info.context.user is None:
+            raise ShowtimesException(
+                401,
+                "You are not logged in",
+            )
+
+        server_id = info.context.user.active.server_id if info.context.user.active else None
+        user_id = info.context.user.user_id
+        async for payload in subs_notification(user_id, server_id):
             yield payload
 
 

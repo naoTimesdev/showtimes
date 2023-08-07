@@ -28,6 +28,7 @@ from showtimes.models.database import (
     ShowtimesCollaborationLinkSync,
     ShowtimesServer,
 )
+from showtimes.models.notification import NotificationDataCollab, NotificationDataCollabSource
 
 from .partials import PartialProjectGQL, PartialServerGQL
 
@@ -98,6 +99,22 @@ class ProjectCollabConfirmationInfoGQL:
             project_id=project_id,
         )
 
+    @classmethod
+    def from_notification(
+        cls: Type[ProjectCollabConfirmationInfoGQL],
+        info: NotificationDataCollabSource,
+        fallback_project: Optional[str] = None,
+    ) -> ProjectCollabConfirmationInfoGQL:
+        project_id = str(info.project) if info.project is not None else None
+        if fallback_project is not None and project_id is None:
+            project_id = fallback_project
+        if project_id is None:
+            raise ValueError(f"Project not found on database for {info.server} collab project")
+        return cls(
+            server_id=str(info.server),
+            project_id=project_id,
+        )
+
 
 @gql.type(name="ProjectCollabConfirmation", description="A confirmation link to a project collab.")
 class ProjectCollabConfirmationGQL:
@@ -112,10 +129,21 @@ class ProjectCollabConfirmationGQL:
     def from_db(
         cls: Type[ProjectCollabConfirmationGQL], confirm: ShowtimesCollaboration
     ) -> ProjectCollabConfirmationGQL:
+        source_proj = confirm.source.project.ref.id if confirm.source.project else None
         return cls(
             id=confirm.collab_id,
             code=confirm.code,
             source=ProjectCollabConfirmationInfoGQL.from_db(confirm.source),
-            target=ProjectCollabConfirmationInfoGQL.from_db(confirm.target),
+            target=ProjectCollabConfirmationInfoGQL.from_db(confirm.target, source_proj),
+            internal_id=str(confirm.id),
+        )
+
+    @classmethod
+    def from_notification(cls: Type[ProjectCollabConfirmationGQL], confirm: NotificationDataCollab):
+        return cls(
+            id=confirm.id,
+            code=confirm.code,
+            source=ProjectCollabConfirmationInfoGQL.from_notification(confirm.source),
+            target=ProjectCollabConfirmationInfoGQL.from_notification(confirm.target, confirm.source.project),
             internal_id=str(confirm.id),
         )

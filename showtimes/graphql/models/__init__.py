@@ -7,10 +7,13 @@ The GraphQL API models
 :license: AGPL-3.0, see LICENSE for more details.
 """
 
+from .collab import *
 from .common import *
 from .enums import *
 from .fallback import *
+from .notification import *
 from .pagination import *
+from .partials import *
 from .projects import *
 from .search import *
 from .servers import *

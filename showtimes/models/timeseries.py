@@ -17,7 +17,6 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
 from uuid import UUID
 
 from beanie import Document, Granularity, Insert, Save, SaveChanges, TimeSeriesConfig, after_event
@@ -25,22 +24,13 @@ from pydantic import Field
 
 from showtimes.controllers.pubsub import get_pubsub
 from showtimes.models.database import EpisodeStatus
+from showtimes.models.pubsub import PubSubType
 
 __all__ = (
-    "PubSubType",
     "TimeSeriesProjectEpisodeChanges",
     "TimeSeriesServerDelete",
     "TimeSeriesProjectDelete",
 )
-
-
-class PubSubType(str, Enum):
-    EPISODE_CHANGE = "project:episode:changes:"
-    SERVER_DELETE = "server:delete:"
-    PROJECT_DELETE = "project:delete:"
-
-    def make(self, id: UUID | str) -> str:
-        return f"{self.value}{id}"
 
 
 class TimeSeriesBase(Document):

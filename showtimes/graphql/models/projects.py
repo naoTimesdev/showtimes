@@ -16,6 +16,8 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
+import math
+import random
 from typing import Type, cast
 
 import strawberry as gql
@@ -64,6 +66,26 @@ __all__ = (
 logger = get_logger("Showtimes.GraphQL.Showtimes.Projects")
 
 
+async def _do_next_prediction(
+    count: int,
+    project_type: str,
+    next_episode: int,
+    *,
+    model: ProjectPredictionModelGQL = ProjectPredictionModelGQL.HISTORY,
+) -> int | None:
+    system = get_prediction_system()
+    try:
+        result = await system.predict(
+            PredictionInput("", episode_count=count, project_type=project_type, episode=next_episode),
+            type=PredictionType.NEXT,
+            use_simulated=model == ProjectPredictionModelGQL.SIMULATED,
+        )
+        return result
+    except Exception as err:
+        logger.error("Failed to predict overall", exc_info=err)
+        return None
+
+
 @gql.type(name="ProjectPrediction", description="The project prediction information")
 class ProjectPredictionGQL:
     server_id: gql.Private[str]
@@ -74,38 +96,25 @@ class ProjectPredictionGQL:
     @gql.field(description="Next episode prediction in days")
     async def next_episode(self, model: ProjectPredictionModelGQL = ProjectPredictionModelGQL.HISTORY) -> int | None:
         if self.priv_next_ep is None:
-            # Every project is done
+            logger.warning(f"There is no next episode for {self.server_id}")
             return None
 
-        system = get_prediction_system()
-        try:
-            result = await system.predict(
-                PredictionInput(self.server_id, self.count, self.type, self.priv_next_ep),
-                type=PredictionType.NEXT,
-                use_simulated=model == ProjectPredictionModelGQL.SIMULATED,
-            )
-            return result
-        except Exception as err:
-            logger.error("Failed to predict overall", exc_info=err)
-            return None
+        return await _do_next_prediction(self.count, self.type, self.priv_next_ep, model=model)
 
     @gql.field(description="Overall prediction in days")
     async def overall(self, model: ProjectPredictionModelGQL = ProjectPredictionModelGQL.HISTORY) -> int | None:
         if self.priv_next_ep is None:
-            # Every project is done
+            return None
+        next_episode = await _do_next_prediction(self.count, self.type, self.priv_next_ep, model=model)
+        if next_episode is None:
             return None
 
-        system = get_prediction_system()
-        try:
-            result = await system.predict(
-                PredictionInput(self.server_id, self.count, self.type),
-                type=PredictionType.OVERALL,
-                use_simulated=model == ProjectPredictionModelGQL.SIMULATED,
-            )
-            return result
-        except Exception as err:
-            logger.error("Failed to predict overall", exc_info=err)
-            return None
+        # Check remaining episodes
+        remaining = self.count - self.priv_next_ep
+        if remaining <= 1:  # If only one episode left, return next episode
+            return next_episode
+        jitter = random.uniform(0.85, 1.15)  # noqa: S311
+        return math.ceil(next_episode * remaining * jitter)  # Multiply next episode by remaining episodes
 
     @classmethod
     def from_db(cls: Type[ProjectPredictionGQL], project: ShowProject):

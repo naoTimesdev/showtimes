@@ -115,14 +115,9 @@ class PredictionModels:
         if isinstance(data.episode, int):
             input_json["episode"] = data.episode
 
-        if type == PredictionType.NEXT:
-            input_json["id"] = self._str_to_intsafe(data.id)
-
         logger.debug(f"Doing prediction with {type} (simulated? {use_simulated}) | {data}")
 
         df = pd.DataFrame([input_json])
-        if "id" in df.columns:
-            df["id"] = df["id"].astype("category")
         df["project_type"] = df["project_type"].astype("category")
 
         result = await self._loop.run_in_executor(None, model.predict, df)

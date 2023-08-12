@@ -110,12 +110,12 @@ class PredictionModels:
 
         input_json = {
             "episode_count": data.episode_count,
-            "project_type": self._str_to_intsafe(data.project_type),
         }
         if isinstance(data.episode, int):
             input_json["episode"] = data.episode
+        input_json["project_type"] = self._str_to_intsafe(data.project_type)
 
-        logger.debug(f"Doing prediction with {type} (simulated? {use_simulated}) | {data}")
+        logger.debug(f"Doing prediction with {type} (simulated? {use_simulated}) | {data} | {input_json}")
 
         df = pd.DataFrame([input_json])
         df["project_type"] = df["project_type"].astype("category")

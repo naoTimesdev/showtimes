@@ -82,7 +82,7 @@ async def _do_next_prediction(
         )
         return result
     except Exception as err:
-        logger.error("Failed to predict overall", exc_info=err)
+        logger.error("Failed to predict next days predicction", exc_info=err)
         return None
 
 
@@ -126,7 +126,7 @@ class ProjectPredictionGQL:
             break
         count = len(project.statuses)
         mapped_types = {
-            "SHOWS": "MOVIE" if count > 1 else "TV",
+            "SHOWS": "TV" if count > 1 else "MOVIE",
         }
         proj_type = mapped_types.get(project.type.value, project.type.value)
         return ProjectPredictionGQL(

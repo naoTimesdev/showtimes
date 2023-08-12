@@ -35,6 +35,7 @@ from typing import (
 )
 
 import httpx
+import orjson
 
 from .._metadata import __version__
 from ..models.abstract import AttributeDict
@@ -145,7 +146,7 @@ class GraphQLClient(Generic[ResultT]):
                 [GraphQLError("Failed to connect to GraphQL API", code="50000")],
             )
         try:
-            json_data = await resp.json()
+            json_data = orjson.loads(await resp.aread())
             get_data = cast(Any, complex_walk(json_data, "data"))
             errors = cast(list[GraphQLErrorDict], complex_walk(json_data, "errors"))
             if not isinstance(errors, list):

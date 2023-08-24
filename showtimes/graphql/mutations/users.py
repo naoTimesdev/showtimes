@@ -129,6 +129,7 @@ async def mutate_register_user(
 
     logger.info(f"Saving user {username} to database")
     await regist_user.save()  # type: ignore
+    await update_searchdb(regist_user)
     return True, UserGQL.from_db(regist_user), None
 
 
@@ -215,6 +216,7 @@ async def mutate_reset_password(
 
     user.password = new_pass_hash
     await user.save()  # type: ignore
+    await update_searchdb(user)
     return True, UserGQL.from_db(user), None
 
 
@@ -281,5 +283,6 @@ async def mutate_user_bind_integrations(
             user.integrations.append(IntegrationId(id=integration.id, type=integration.type))
 
     await user.save()  # type: ignore
+    await update_searchdb(user)
     logger.info(f"Provided integrations has been applied to user {username}")
     return True, user, None

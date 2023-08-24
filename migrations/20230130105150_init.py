@@ -682,6 +682,11 @@ class Forward:
         logger.info("Meilisearch client instances created!")
         meili_client = get_searcher()
 
+        logger.info("Setting up Meilisearch indexes...")
+        await meili_client.update_schema_settings(ProjectSearch)
+        await meili_client.update_schema_settings(ServerSearch)
+        await meili_client.update_schema_settings(UserSearch)
+
         logger.info("Fetching ShowtimesUISchema...")
         all_ui_info = await ShowtimesUISchema.find_all(session=session).to_list()
         logger.info("Fetching ShowAdminSchema...")
@@ -905,18 +910,18 @@ class Forward:
         for server in ADDED_SHOWTIMES_SERVERS.values():
             search_srv_docs.append(ServerSearch.from_db(server))
         logger.info(f"  Adding {len(search_srv_docs)} documents to Server Index...")
-        await meili_client.add_documents(search_srv_docs)  # type: ignore
+        await meili_client.add_documents(search_srv_docs)
         search_proj_docs: list[ProjectSearch] = []
         for projects in ADDED_SHOWTIMES_PROJECTS.values():
             for project in projects.values():
                 search_proj_docs.append(ProjectSearch.from_db(project))
         logger.info(f"  Adding {len(search_proj_docs)} documents to Project Index...")
-        await meili_client.add_documents(search_proj_docs)  # type: ignore
+        await meili_client.add_documents(search_proj_docs)
         search_user_docs: list[UserSearch] = []
         for user in ADDED_SHOWTIMES_USERS.values():
             search_user_docs.append(UserSearch.from_db(user))
         logger.info(f"  Adding {len(search_user_docs)} documents to User Index...")
-        await meili_client.add_documents(search_user_docs)  # type: ignore
+        await meili_client.add_documents(search_user_docs)
 
         logger.info("Closing Meilisearch client instances...")
         await meili_client.close()

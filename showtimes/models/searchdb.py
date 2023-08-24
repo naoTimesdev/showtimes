@@ -114,6 +114,8 @@ class SchemaAble:
 
     class Config:
         index: str
+        searchable_fields: list[str]
+        filterable_fields: list[str]
 
 
 @dataclass
@@ -131,6 +133,7 @@ class ServerSearch(SchemaAble):
 
     class Config:
         index = "servers"
+        filterable_fields: ClassVar[list[str]] = ["id", "integrations.id", "integrations.type", "projects"]
 
     @classmethod
     def from_db(cls: Type[ServerSearch], server: ShowtimesServer):
@@ -157,6 +160,24 @@ class ProjectSearch(SchemaAble):
 
     class Config:
         index = "projects"
+        searchable_fields: ClassVar[list[str]] = [
+            "id",
+            "title",
+            "created_at",
+            "updated_at",
+            "server_id",
+            "integrations.id",
+            "integrations.type",
+            "aliases",
+        ]
+        filterable_fields: ClassVar[list[str]] = [
+            "id",
+            "integrations.id",
+            "integrations.type",
+            "server_id",
+            "created_at",
+            "updated_at",
+        ]
 
     @classmethod
     def from_db(cls: Type[ProjectSearch], project: ShowProject):
@@ -184,7 +205,16 @@ class UserSearch(SchemaAble):
     avatar_url: str | None = None
 
     class Config:
-        index = "users"
+        index: str = "users"
+        searchable_fields: ClassVar[list[str]] = [
+            "id",
+            "username",
+            "integrations.id",
+            "integrations.type",
+            "name",
+            "type",
+        ]
+        filterable_fields: ClassVar[list[str]] = ["id", "username", "integrations.id", "integrations.type", "type"]
 
     @classmethod
     def from_db(cls: Type[UserSearch], user: ShowtimesUserGroup):

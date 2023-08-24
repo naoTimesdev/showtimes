@@ -57,7 +57,7 @@ class Forward:
             search_proj_docs.append(server_search)
 
         logger.info("Updating Meilisearch documents...")
-        await meili_client.update_documents(search_proj_docs)  # type: ignore
+        await meili_client.update_documents(search_proj_docs)
 
         logger.info("Closing Meilisearch client instances...")
         await meili_client.close()

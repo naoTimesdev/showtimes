@@ -100,13 +100,13 @@ class ShowtimesSearcher(Generic[SchemaT]):
         index = self._client.index(document.Config.index)
         await index.add_documents([document.to_dict()], primary_key="id")
 
-    async def add_documents(self, documents: list[SchemaAble]):
+    async def add_documents(self, documents: list[SchemaT]):
         if not all(issubclass(type(document), SchemaAble) for document in documents):
             raise TypeError("all documents must be a SchemaAble object.")
         if not all(hasattr(document, "id") for document in documents):
             raise TypeError("all documents must have an id attribute.")
 
-        group_by_index: dict[str, list[SchemaAble]] = {}
+        group_by_index: dict[str, list[SchemaT]] = {}
         for document in documents:
             group_by_index.setdefault(document.Config.index, []).append(document)
         for index_name, documents in group_by_index.items():
@@ -148,13 +148,13 @@ class ShowtimesSearcher(Generic[SchemaT]):
         index = self._client.index(document.Config.index)
         await index.update_documents([document.to_dict()], primary_key="id")
 
-    async def update_documents(self, documents: list[SchemaAble]):
+    async def update_documents(self, documents: list[SchemaT]):
         if not all(issubclass(type(document), SchemaAble) for document in documents):
             raise TypeError("all documents must be a SchemaAble object.")
         if not all(hasattr(document, "id") for document in documents):
             raise TypeError("all documents must have an id attribute.")
 
-        group_by_index: dict[str, list[SchemaAble]] = {}
+        group_by_index: dict[str, list[SchemaT]] = {}
         for document in documents:
             group_by_index.setdefault(document.Config.index, []).append(document)
         for index_name, documents in group_by_index.items():
@@ -167,6 +167,25 @@ class ShowtimesSearcher(Generic[SchemaT]):
     async def update_facet(self, index_name: str, facet: list[str]):
         index = self._client.index(index_name)
         await index.update_filterable_attributes(facet)
+
+    async def update_schema_settings(self, schema: type[SchemaT]):
+        if not hasattr(schema, "Config"):
+            raise TypeError("schema must have a Config inner class.")
+        index = self._client.index(schema.Config.index)
+        try:
+            await index.get_settings()
+        except MeilisearchApiError as exc:
+            if exc.status_code != 404:
+                raise
+            self._logger.warning("Missing index, creating %s", schema.Config.index)
+            index = await self._client.create_index(schema.Config.index, primary_key="id")
+
+        if hasattr(schema.Config, "searchable_fields"):
+            self._logger.info("Updating searchable attributes for %s", schema.Config.index)
+            await index.update_searchable_attributes(schema.Config.searchable_fields)
+        if hasattr(schema.Config, "filterable_fields"):
+            self._logger.info("Updating filterable attributes for %s", schema.Config.index)
+            await index.update_filterable_attributes(schema.Config.filterable_fields)
 
 
 _SHOWTIMES_SEARCHER: ShowtimesSearcher | None = None

@@ -182,12 +182,16 @@ async def mutate_server_update_owners(
         return False, "You are not one of the owner of this server", ErrorCode.ServerNotAllowed
     first_owner: UUID | None = None
 
+    user_info = await ShowtimesUserGroup.find(OpIn(ShowtimesUser.user_id, input_data), with_children=True).to_list()
+
     logger.info(f"Fetching owners for server {id} | {owners}")
     fetch_owners = await ShowtimesUserGroup.find(OpIn(ShowtimesUser.id, owners), with_children=True).to_list()
     first_owner_db = fetch_owners[0]
     logger.info(f"First owner is {first_owner_db} | {input_data}")
-    ids_to_owner = {owner.user_id: owner for owner in fetch_owners}
-    logger.info(f"IDs to owner from input data {ids_to_owner} | {input_data}")
+    ids_to_owner_server = {owner.user_id: owner for owner in fetch_owners}
+    ids_to_owner_other = {owner.user_id: owner for owner in user_info}
+    ids_to_owner_merge = {**ids_to_owner_server, **ids_to_owner_other}
+    logger.info(f"IDs to owner from input data {ids_to_owner_server} | {input_data}")
     for owner in input_data:
         if owner == first_owner_db.user_id:
             first_owner = owner
@@ -202,7 +206,7 @@ async def mutate_server_update_owners(
 
     reposition_owners = [first_owner_db]
     for owner in input_data:
-        owner_db = ids_to_owner.get(owner)
+        owner_db = ids_to_owner_merge.get(owner)
         if owner_db is None:
             continue
         reposition_owners.append(owner_db)

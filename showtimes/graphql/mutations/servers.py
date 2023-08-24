@@ -187,6 +187,7 @@ async def mutate_server_update_owners(
     first_owner_db = fetch_owners[0]
     logger.info(f"First owner is {first_owner_db} | {input_data}")
     ids_to_owner = {owner.user_id: owner for owner in fetch_owners}
+    logger.info(f"IDs to owner from input data {ids_to_owner} | {input_data}")
     for owner in input_data:
         if owner == first_owner_db.user_id:
             first_owner = owner

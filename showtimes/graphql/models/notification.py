@@ -35,6 +35,7 @@ __all__ = (
     "NotificationGQL",
 )
 
+
 @gql.type(
     name="NotificationDataAdminBroadcastGQL", description="The data for the notification for the admin broadcast."
 )

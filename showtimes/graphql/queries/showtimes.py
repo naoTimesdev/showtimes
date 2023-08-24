@@ -32,6 +32,7 @@ from showtimes.graphql.models.pagination import Connection, PageInfo, SortDirect
 from showtimes.graphql.models.projects import ProjectGQL
 from showtimes.graphql.models.servers import ServerGQL
 from showtimes.models.database import ShowProject, ShowtimesServer
+from showtimes.tooling import get_logger
 
 __all__ = (
     "resolve_server_fetch",
@@ -43,15 +44,19 @@ __all__ = (
 )
 ResultT = TypeVar("ResultT")
 ResultOrT: TypeAlias = tuple[Literal[False], str, str] | tuple[Literal[True], ResultT, None]
+logger = get_logger("Showtimes.GraphQL.Query.Showtimes")
 
 
 async def resolve_server_fetch(srv_id: str, owner_id: str | None = None) -> ResultOrT[ShowtimesServer]:
+    logger.info(f"Fetching server {srv_id} with owner {owner_id}")
     srv_info = await ShowtimesServer.find_one(ShowtimesServer.server_id == UUID(srv_id))
     if not srv_info:
+        logger.warning(f"Server {srv_id} not found")
         return False, "Server not found", ErrorCode.ServerNotFound
 
     object_owners: list[ObjectId] = [owner.ref.id for owner in srv_info.owners]
     if owner_id is not None and ObjectId(owner_id) not in object_owners:
+        logger.warning(f"User {owner_id} is not one of the owner of server {srv_id}")
         return False, "You are not one of the owner of this server", ErrorCode.ServerNotAllowed
 
     return True, srv_info, None
@@ -68,12 +73,12 @@ async def resolve_servers_fetch_paginated(
     direction = "-" if sort is SortDirection.DESCENDING else "+"
 
     cursor_id = parse_cursor(cursor)
+    logger.info(f"Fetching servers with cursor {cursor_id} | limit {act_limit} | sort {sort} | owner ID {owner_id}")
     find_args = []
     if owner_id is not None:
-        find_args.append(
-            OpIn(ShowtimesServer.owners, [DBRef(ShowtimesServer.get_motor_collection(), ObjectId(owner_id))])
-        )
+        find_args.append(OpIn(ShowtimesServer.owners, [DBRef(ShowtimesServer.Settings.name, ObjectId(owner_id))]))
     if isinstance(ids, list):
+        logger.info(f"Fetching servers with IDs {ids}")
         find_args.append(OpIn(ShowtimesServer.server_id, ids))
     if cursor_id is not None:
         find_args.append(ShowtimesServer.id >= cursor_id)
@@ -87,6 +92,7 @@ async def resolve_servers_fetch_paginated(
         .to_list()
     )
     if len(items) < 1:
+        logger.warning("No results found from query, returning empty connection")
         return Connection(
             count=0,
             page_info=PageInfo(total_results=0, per_page=limit, next_cursor=None, has_next_page=False),
@@ -99,6 +105,7 @@ async def resolve_servers_fetch_paginated(
     if isinstance(ids, list):
         query_count.append(OpIn(ShowtimesServer.server_id, ids))
 
+    logger.info(f"Fetching servers count with query {query_count}")
     items_count = await ShowtimesServer.find(*query_count).count()
 
     last_item = None
@@ -122,6 +129,7 @@ async def resolve_servers_fetch_paginated(
 
 
 async def resolve_server_project_fetch(srv_id: str, project_id: str) -> ResultOrT[ShowProject]:
+    logger.info(f"Fetching project {project_id} on server {srv_id}")
     proj_info = await ShowProject.find_one(
         OpAnd(
             ShowProject.server_id == UUID(srv_id),  # type: ignore
@@ -129,6 +137,7 @@ async def resolve_server_project_fetch(srv_id: str, project_id: str) -> ResultOr
         )
     )
     if not proj_info:
+        logger.error(f"Project {project_id} not found on server {srv_id}")
         return False, "Project not found on specified server", ErrorCode.ProjectNotFound
 
     return True, proj_info, None

@@ -23,7 +23,7 @@ from uuid import UUID
 import strawberry as gql
 from beanie.operators import And as OpAnd
 from beanie.operators import In as OpIn
-from bson import DBRef, ObjectId
+from bson import ObjectId
 
 from showtimes.graphql.cursor import Cursor, parse_cursor, to_cursor
 from showtimes.graphql.models.common import KeyValueGQL
@@ -76,7 +76,7 @@ async def resolve_servers_fetch_paginated(
     logger.info(f"Fetching servers with cursor {cursor_id} | limit {act_limit} | sort {sort} | owner ID {owner_id}")
     find_args = []
     if owner_id is not None:
-        find_args.append(OpIn(ShowtimesServer.owners, [DBRef(ShowtimesServer.Settings.name, ObjectId(owner_id))]))
+        find_args.append(OpIn("owners.$id", [ObjectId(owner_id)]))
     if isinstance(ids, list):
         logger.info(f"Fetching servers with IDs {ids}")
         find_args.append(OpIn(ShowtimesServer.server_id, ids))

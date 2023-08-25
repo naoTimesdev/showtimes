@@ -163,6 +163,6 @@ async def common_mutate_project_delete(
     # TODO: Delete confirmation
 
     await TimeSeriesProjectDelete.insert_one(
-        TimeSeriesProjectDelete(model_id=project_id, server_id=server_info.server_id)
+        TimeSeriesProjectDelete(oobj_id=project_id, server_id=server_info.server_id)
     )
     return Result(success=True, message="Project deleted", code=ErrorCode.Success)

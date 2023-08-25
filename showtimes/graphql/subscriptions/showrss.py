@@ -43,28 +43,28 @@ async def subs_showrss_feeds(
                 TimeSeriesShowRSSFeedEntry.server_id == server_id,
                 TimeSeriesShowRSSFeedEntry.ts >= datetime.utcfromtimestamp(start_from),
             ):
-                yield ShowRSSEntryGQL.from_timeseries(prepayload)
+                yield await ShowRSSEntryGQL.from_timeseries(prepayload)
 
         pub_topic = PubSubType.RSS_SERVER.make(server_id)
         logger.info(f"Subscribing to server RSS feeds: {pub_topic}")
         async for payload in pubsub.subscribe(pub_topic):
             if isinstance(payload, TimeSeriesShowRSSFeedEntry):
-                yield ShowRSSEntryGQL.from_timeseries(payload)
+                yield await ShowRSSEntryGQL.from_timeseries(payload)
     elif isinstance(feeds_id, UUID):
         if isinstance(start_from, int):
             # Fetch the latest episode changes
             logger.info(f"Fetching latest rss entry for feeds {server_id} | {start_from}")
             async for prepayload in TimeSeriesShowRSSFeedEntry.find(
-                TimeSeriesShowRSSFeedEntry.model_id == feeds_id,
+                TimeSeriesShowRSSFeedEntry.oobj_id == feeds_id,
                 TimeSeriesShowRSSFeedEntry.ts >= datetime.utcfromtimestamp(start_from),
             ):
-                yield ShowRSSEntryGQL.from_timeseries(prepayload)
+                yield await ShowRSSEntryGQL.from_timeseries(prepayload)
 
         pub_topic = PubSubType.RSS_FEED.make(feeds_id)
         logger.info(f"Subscribing to RSS feeds: {pub_topic}")
         async for payload in pubsub.subscribe(pub_topic):
             if isinstance(payload, TimeSeriesShowRSSFeedEntry):
-                yield ShowRSSEntryGQL.from_timeseries(payload)
+                yield await ShowRSSEntryGQL.from_timeseries(payload)
     else:
         if isinstance(start_from, int):
             # Fetch the latest episode changes
@@ -72,10 +72,10 @@ async def subs_showrss_feeds(
             async for prepayload in TimeSeriesShowRSSFeedEntry.find(
                 TimeSeriesShowRSSFeedEntry.ts >= datetime.utcfromtimestamp(start_from),
             ):
-                yield ShowRSSEntryGQL.from_timeseries(prepayload)
+                yield await ShowRSSEntryGQL.from_timeseries(prepayload)
 
         pub_topic = PubSubType.RSS_MULTI.make("ALL")
         logger.info(f"Subscribing to all RSS feeds: {pub_topic}")
         async for payload in pubsub.subscribe(pub_topic):
             if isinstance(payload, TimeSeriesShowRSSFeedEntry):
-                yield ShowRSSEntryGQL.from_timeseries(payload)
+                yield await ShowRSSEntryGQL.from_timeseries(payload)

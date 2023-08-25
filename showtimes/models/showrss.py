@@ -24,8 +24,9 @@ from uuid import UUID
 from beanie import Document, Link
 from pydantic import BaseModel, Field
 
-from showtimes.models.integrations import IntegrationId
 from showtimes.utils import make_uuid
+
+from .integrations import IntegrationId
 
 __all__ = (
     "ShowRSSFeedFormatterEmbed",

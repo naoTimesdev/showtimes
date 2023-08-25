@@ -306,6 +306,6 @@ async def mutate_server_delete(
     logger.info(f"Deleting server {server_id}...")
     await delete_searchdb(server_info)
     await server_info.delete()  # type: ignore
-    await TimeSeriesServerDelete.insert_one(TimeSeriesServerDelete(model_id=server_id))
+    await TimeSeriesServerDelete.insert_one(TimeSeriesServerDelete(oobj_id=server_id))
 
     return Result(success=True, message="Server deleted", code=None)

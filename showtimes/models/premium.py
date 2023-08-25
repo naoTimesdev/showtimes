@@ -19,11 +19,11 @@ from __future__ import annotations
 from enum import Enum
 from uuid import UUID
 
-from beanie import Document, Insert, Replace, Save, SaveChanges, Update, ValidateOnSave, after_event
+from beanie import Document, Insert, Replace, Save, SaveChanges, Update, ValidateOnSave
 from pendulum.datetime import DateTime
 from pydantic import ConfigDict, Field
 
-from ._doc import _coerce_to_pendulum
+from showtimes.typings import PydanticDateTime
 
 __all__ = (
     "ShowtimesPremium",
@@ -48,17 +48,9 @@ class ShowtimesPremium(Document):
     """The target object this premium ticket is for."""
     kind: ShowtimesPremiumKind
     """The kind of premium ticket this is."""
-    expires_at: DateTime = Field(default_factory=DateTime.utcnow)
+    expires_at: PydanticDateTime = Field(default_factory=DateTime.utcnow)
     """The date and time this premium ticket expires at."""
-    created_at: DateTime = Field(default_factory=DateTime.utcnow)
+    created_at: PydanticDateTime = Field(default_factory=DateTime.utcnow)
     """The date and time this premium ticket was created at."""
-
-    @after_event(*AllEvent)
-    def coerce_pendulum(self):
-        _coerce_to_pendulum(self)
-
-    def _save_state(self) -> None:
-        _coerce_to_pendulum(self)
-        super()._save_state()
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

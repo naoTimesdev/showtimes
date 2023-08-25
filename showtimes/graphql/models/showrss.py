@@ -259,7 +259,7 @@ class ShowRSSEntryGQL:
 
     @classmethod
     async def from_timeseries(cls: type[ShowRSSEntryGQL], entry: TimeSeriesShowRSSFeedEntry):
-        feed = await ShowRSSFeed.find_one(ShowRSSFeed.feed_id == entry.model_id)
+        feed = await ShowRSSFeed.find_one(ShowRSSFeed.feed_id == entry.oobj_id)
         if feed is None:
             raise ValueError("Feed not found.")
 

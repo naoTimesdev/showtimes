@@ -21,25 +21,14 @@ from enum import Enum
 from typing import Optional, TypeVar
 from uuid import UUID
 
-from beanie import (
-    Document,
-    Insert,
-    Link,
-    Replace,
-    Save,
-    SaveChanges,
-    Update,
-    ValidateOnSave,
-    after_event,
-    before_event,
-)
+from beanie import Document, Insert, Link, Replace, Save, SaveChanges, Update, ValidateOnSave, before_event
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
-from showtimes.models.integrations import IntegrationId
+from showtimes.typings import PydanticDateTime
 
 from ..utils import generate_custom_code, make_uuid
-from ._doc import _coerce_to_pendulum, pendulum_utc
+from .integrations import IntegrationId
 
 __all__ = (
     "ImageMetadata",
@@ -282,24 +271,16 @@ class ShowProject(Document):
     """
     aliases: list[str] = Field(default_factory=list)
     """A list of aliases for this project."""
-    created_at: DateTime = Field(default_factory=pendulum_utc)
+    created_at: PydanticDateTime = Field(default_factory=DateTime.utcnow)
     """The time this project was created."""
-    updated_at: DateTime = Field(default_factory=pendulum_utc)
+    updated_at: PydanticDateTime = Field(default_factory=DateTime.utcnow)
     """The time this project was last updated."""
     type: ShowProjectType = Field(default=ShowProjectType.SHOWS)
     """The type of the project."""
 
-    @after_event(*AllEvent)
-    def coerce_penulum(self):
-        _coerce_to_pendulum(self)
-
     @before_event(*AllEvent)
     def _update_time(self):
-        self.updated_at = pendulum_utc()
-
-    def _save_state(self):
-        _coerce_to_pendulum(self)
-        super()._save_state()
+        self.updated_at = DateTime.utcnow()
 
     class Settings:
         name = "ShowtimesProjects"

@@ -41,6 +41,7 @@ from showtimes.graphql.models.notification import NotificationGQL
 from showtimes.graphql.models.pagination import Connection, SortDirection
 from showtimes.graphql.models.projects import ProjectEpisodeInput, ProjectGQL, ProjectInputGQL
 from showtimes.graphql.models.servers import ServerGQL, ServerInputGQL
+from showtimes.graphql.models.showrss import ShowRSSEntryGQL
 from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, UserType
 from showtimes.models.session import ServerSessionInfo
 from showtimes.utils import make_uuid
@@ -687,7 +688,7 @@ class Subscription:
         info: Info[SessionQLContext, None],
         server_id: UUID | None = gql.UNSET,
         feeds_id: UUID | None = gql.UNSET,
-    ):
+    ) -> AsyncGenerator[ShowRSSEntryGQL, None]:
         if info.context.user is None:
             raise ShowtimesException(
                 401,

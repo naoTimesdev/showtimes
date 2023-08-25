@@ -24,8 +24,9 @@ from beanie import Document, Granularity, Insert, Save, SaveChanges, TimeSeriesC
 from pydantic import Field
 
 from showtimes.controllers.pubsub import get_pubsub
-from showtimes.models.database import EpisodeStatus
-from showtimes.models.pubsub import PubSubType
+
+from .database import EpisodeStatus
+from .pubsub import PubSubType
 
 __all__ = (
     "TimeSeriesProjectEpisodeChanges",
@@ -38,7 +39,7 @@ __all__ = (
 class TimeSeriesBase(Document):
     ts: datetime = Field(default_factory=datetime.utcnow)
     """The timestamp of the change"""
-    model_id: UUID
+    oobj_id: UUID
     """The model ID, can be the project, server, or anything"""
 
     class Settings:
@@ -64,7 +65,7 @@ class TimeSeriesProjectEpisodeChanges(TimeSeriesBase):
     def publish_changes(self):
         pubsub = get_pubsub()
         # Two publish
-        pubsub.publish(PubSubType.EPISODE_CHANGE.make(self.model_id), self)
+        pubsub.publish(PubSubType.EPISODE_CHANGE.make(self.oobj_id), self)
         pubsub.publish(PubSubType.EPISODE_CHANGE.make(self.server_id), self)
 
 
@@ -73,7 +74,7 @@ class TimeSeriesServerDelete(TimeSeriesBase):
     def publish_changes(self):
         pubsub = get_pubsub()
         # Two publish
-        pubsub.publish(PubSubType.SERVER_DELETE.make(self.model_id), self)
+        pubsub.publish(PubSubType.SERVER_DELETE.make(self.oobj_id), self)
         pubsub.publish(PubSubType.SERVER_DELETE.make("ALL"), self)
 
 
@@ -85,7 +86,7 @@ class TimeSeriesProjectDelete(TimeSeriesBase):
     def publish_changes(self):
         pubsub = get_pubsub()
         # Two publish
-        pubsub.publish(PubSubType.PROJECT_DELETE.make(self.model_id), self)
+        pubsub.publish(PubSubType.PROJECT_DELETE.make(self.oobj_id), self)
         pubsub.publish(PubSubType.PROJECT_DELETE.make(id=self.server_id), self)
         pubsub.publish(PubSubType.PROJECT_DELETE.make("ALL"), self)
 
@@ -99,6 +100,6 @@ class TimeSeriesShowRSSFeedEntry(TimeSeriesBase):
     @after_event(Insert, Save, SaveChanges)
     def publish_changes(self):
         pubsub = get_pubsub()
-        pubsub.publish(PubSubType.RSS_FEED.make(self.model_id), self)
+        pubsub.publish(PubSubType.RSS_FEED.make(self.oobj_id), self)
         pubsub.publish(PubSubType.RSS_SERVER.make(self.server_id), self)
         pubsub.publish(PubSubType.RSS_MULTI.make("ALL"), self)

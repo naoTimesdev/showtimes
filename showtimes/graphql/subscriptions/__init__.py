@@ -8,4 +8,5 @@ The subscriptions handler for showtimes.
 """
 
 from .notification import *
+from .showrss import *
 from .showtimes import *

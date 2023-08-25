@@ -16,18 +16,23 @@ If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
-from enum import Enum
-from uuid import UUID
+from string import Formatter
+from typing import Any
+
+__all__ = ("OptionalFormatter",)
 
 
-class PubSubType(str, Enum):
-    EPISODE_CHANGE = "project:episode:changes:"
-    SERVER_DELETE = "server:delete:"
-    PROJECT_DELETE = "project:delete:"
-    NOTIIFCATION = "notification"
-    RSS_FEED = "rss:feed:"
-    RSS_SERVER = "rss:server:"
-    RSS_MULTI = "rss:multi:"
+class _OptinalDict(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
 
-    def make(self, id: UUID | str) -> str:
-        return f"{self.value}{id!s}"
+
+class OptionalFormatter:
+    def __init__(self, data: dict[str, Any]) -> None:
+        self.fmt = Formatter()
+        self.data = _OptinalDict(data)
+
+    @classmethod
+    def format(cls, text: str, **kwargs: Any):
+        formatter = cls(kwargs)
+        return formatter.fmt.vformat(text, (), formatter.data)

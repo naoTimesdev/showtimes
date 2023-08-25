@@ -101,3 +101,4 @@ class TimeSeriesShowRSSFeedEntry(TimeSeriesBase):
         pubsub = get_pubsub()
         pubsub.publish(PubSubType.RSS_FEED.make(self.model_id), self)
         pubsub.publish(PubSubType.RSS_SERVER.make(self.server_id), self)
+        pubsub.publish(PubSubType.RSS_MULTI.make("ALL"), self)

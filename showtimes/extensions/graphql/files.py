@@ -72,7 +72,7 @@ def _mmagic_modern_img_format(magic: bytes):
     return None
 
 
-async def get_file_mimetype(file: UploadFile):
+async def get_file_mimetype(file: UploadFile) -> str:
     # Get current seek position
     loop = asyncio.get_event_loop()
     current_pos = file.file.tell()

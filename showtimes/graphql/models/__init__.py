@@ -17,4 +17,5 @@ from .partials import *
 from .projects import *
 from .search import *
 from .servers import *
+from .showrss import *
 from .users import *

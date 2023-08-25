@@ -76,6 +76,7 @@ from .queries.showtimes import (
     resolve_servers_fetch_paginated,
 )
 from .subscriptions.notification import subs_notification
+from .subscriptions.showrss import subs_showrss_feeds
 from .subscriptions.showtimes import (
     ProjectEpisodeUpdateSubs,
     SubsResponse,
@@ -678,6 +679,29 @@ class Subscription:
         server_id = info.context.user.active.server_id if info.context.user.active else None
         user_id = info.context.user.user_id
         async for payload in subs_notification(user_id, server_id):
+            yield payload
+
+    @gql.subscription(description="Subscribe to RSS Feed Entry")
+    async def rss_feed(
+        self,
+        info: Info[SessionQLContext, None],
+        server_id: UUID | None = gql.UNSET,
+        feeds_id: UUID | None = gql.UNSET,
+    ):
+        if info.context.user is None:
+            raise ShowtimesException(
+                401,
+                "You are not logged in",
+            )
+
+        model_id = server_id or feeds_id
+        if not isinstance(model_id, UUID) and not info.context.user.privilege != UserType.ADMIN:
+            raise ShowtimesException(
+                400,
+                "You must provide either serverId or feedsId or be an admin to watch every feed entry",
+            )
+
+        async for payload in subs_showrss_feeds(server_id=server_id, feeds_id=feeds_id):
             yield payload
 
 

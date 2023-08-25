@@ -33,7 +33,8 @@ from showtimes.controllers.sessions.handler import UserSessionWithToken, get_ses
 from showtimes.errors import ShowtimesControllerUninitializedError
 from showtimes.extensions.fastapi.errors import ShowtimesException
 from showtimes.graphql.mutations.users import mutate_login_user
-from showtimes.models.database import DefaultIntegrationType, ShowtimesUser, ShowtimesUserDiscord, UserType
+from showtimes.models.database import ShowtimesUser, ShowtimesUserDiscord, UserType
+from showtimes.models.integrations import DefaultIntegrationType
 from showtimes.models.session import UserSession
 from showtimes.tooling import get_env_config
 from showtimes.utils import generate_custom_code

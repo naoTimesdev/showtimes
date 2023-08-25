@@ -18,33 +18,35 @@ from __future__ import annotations
 
 import logging
 import time
+from inspect import isclass
 from typing import TYPE_CHECKING, Optional
 from urllib.parse import ParseResult, parse_qs, urlparse
 
-from beanie import init_beanie
+from beanie import Document, init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import PyMongoError
-
-from showtimes.models.timeseries import TimeSeriesBase, TimeSeriesProjectEpisodeChanges
 
 if TYPE_CHECKING:
     from motor.core import AgnosticClient, AgnosticDatabase
 
-from showtimes.models.database import (
-    RoleActor,
-    ShowExternalAnilist,
-    ShowExternalData,
-    ShowExternalTMDB,
-    ShowProject,
-    ShowtimesCollaboration,
-    ShowtimesCollaborationLinkSync,
-    ShowtimesServer,
-    ShowtimesTemporaryUser,
-    ShowtimesUser,
-    ShowtimesUserGroup,
-)
+from showtimes import models as ShowtimesModels  # noqa: N812
 
 __all__ = ("ShowtimesDatabase",)
+
+
+def discover_beanie_models() -> list[type[Document]]:
+    all_models: list[type[Document]] = []
+    for name in dir(ShowtimesModels):
+        if name.startswith("_"):
+            continue
+
+        model_or = getattr(ShowtimesModels, name)
+        if isclass(model_or) and issubclass(model_or, Document):
+            model_path = model_or.__module__
+            if not model_path.startswith("showtimes.models"):
+                continue
+            all_models.append(model_or)
+    return all_models
 
 
 class ShowtimesDatabase:
@@ -128,19 +130,5 @@ class ShowtimesDatabase:
     async def connect(self):
         await init_beanie(
             database=self._db,
-            document_models=[
-                RoleActor,
-                ShowExternalAnilist,
-                ShowExternalTMDB,
-                ShowExternalData,
-                ShowProject,
-                ShowtimesServer,
-                ShowtimesUserGroup,
-                ShowtimesUser,
-                ShowtimesTemporaryUser,
-                ShowtimesCollaboration,
-                ShowtimesCollaborationLinkSync,
-                TimeSeriesBase,
-                TimeSeriesProjectEpisodeChanges,
-            ],  # type: ignore
+            document_models=discover_beanie_models(),  # type: ignore
         )

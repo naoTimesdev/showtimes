@@ -29,13 +29,13 @@ from showtimes.graphql.models.enums import IntegrationInputActionGQL
 from showtimes.graphql.models.fallback import ErrorCode
 from showtimes.graphql.models.users import UserTemporaryGQL
 from showtimes.models.database import (
-    IntegrationId,
     ShowtimesTemporaryUser,
     ShowtimesTempUserType,
     ShowtimesUser,
     ShowtimesUserGroup,
     UserType,
 )
+from showtimes.models.integrations import IntegrationId
 from showtimes.models.searchdb import UserSearch
 from showtimes.tooling import get_logger
 

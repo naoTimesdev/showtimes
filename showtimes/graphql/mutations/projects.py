@@ -67,7 +67,6 @@ from showtimes.models.database import (
     DEFAULT_ROLES_SHOWS,
     EpisodeStatus,
     ImageMetadata,
-    IntegrationId,
     RoleActor,
     RoleStatus,
     ShowActor,
@@ -81,6 +80,7 @@ from showtimes.models.database import (
     ShowtimesServer,
     to_link,
 )
+from showtimes.models.integrations import IntegrationId
 from showtimes.models.searchdb import ProjectSearch, ServerSearch
 from showtimes.models.timeseries import TimeSeriesProjectEpisodeChanges
 from showtimes.tooling import get_logger

@@ -18,8 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from enum import Enum
-from functools import cached_property
-from typing import Optional, Type, TypeVar
+from typing import Optional, TypeVar
 from uuid import UUID
 
 from beanie import (
@@ -37,9 +36,27 @@ from beanie import (
 from pendulum.datetime import DateTime
 from pydantic import BaseModel, Field
 
+from showtimes.models.integrations import IntegrationId
+
 from ..utils import generate_custom_code, make_uuid
 from ._doc import _coerce_to_pendulum, pendulum_utc
 
+__all__ = (
+    "ImageMetadata",
+    "RoleStatus",
+    "RoleActor",
+    "ShowProject",
+    "UserType",
+    "ShowtimesUserDiscord",
+    "ShowtimesUserGroup",
+    "ShowtimesUser",
+    "ShowtimesTempUserType",
+    "ShowtimesTemporaryUser",
+    "ShowtimesServer",
+    "ShowtimesCollaborationInfo",
+    "ShowtimesCollaboration",
+    "ShowtimesCollaborationLinkSync",
+)
 AllEvent = [Insert, Replace, Update, Save, SaveChanges, ValidateOnSave]
 DocT = TypeVar("DocT", bound=Document)
 
@@ -69,66 +86,6 @@ class ImageMetadata(BaseModel):
         if self.parent is None:
             return f"/{self.type}/{self.key}/{self.filename}"
         return f"/{self.type}/{self.key}/{self.parent}/{self.filename}"
-
-
-class DefaultIntegrationType:
-    """
-    A simple class to hold the default integration type.
-    """
-
-    DiscordRole = "DISCORD_ROLE"
-    DiscordUser = "DISCORD_USER"
-    DiscordChannel = "DISCORD_TEXT_CHANNEL"
-    DiscordGuild = "DISCORD_GUILD"
-    FansubDB = "FANSUBDB_ID"
-    FansubDBProject = "FANSUBDB_PROJECT_ID"
-    FansubDBAnime = "FANSUBDB_ANIME_ID"
-    ShowtimesUser = "SHOWTIMES_USER"
-    PrefixAnnounce = "ANNOUNCEMENT_"
-
-    @cached_property
-    def all(self) -> dict[str, str]:
-        """:class:`dict[str, str]`: All the default type mappings."""
-        invalid_dir = ["all", "verify"]
-        return {k: getattr(self, k) for k in dir(self) if not k.startswith("__") and k not in invalid_dir}
-
-    @classmethod
-    def verify(cls: Type[DefaultIntegrationType], input_type: str) -> bool:
-        """Verify if the input type is valid.
-
-        Parameters
-        ----------
-        input_type: :class:`str`
-            The input type to verify.
-
-        Returns
-        -------
-        :class:`bool`
-            Whether the input type is valid or not.
-        """
-        all_inputs = cls().all
-        if input_type.startswith(cls.PrefixAnnounce):
-            input_type = input_type.replace(cls.PrefixAnnounce, "", 1)
-        return input_type in all_inputs.values()
-
-
-class IntegrationId(BaseModel):
-    """
-    Model to hold the ID of an integration.
-
-    This can be used to denote Discord Integration
-    like which actor is linked to which Discord user.
-    """
-
-    id: str
-    type: str  # Example: discord, telegram, etc.
-    # A more complex example would be:
-    # - DISCORD_ROLE: The role ID of the role.
-    # - DISCORD_USER: The user ID of the user.
-
-    @before_event(Insert, Replace, Update, SaveChanges)
-    def capitalize_type(self):
-        self.type = self.type.upper()
 
 
 class RoleStatus(BaseModel):

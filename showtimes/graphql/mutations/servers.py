@@ -36,13 +36,13 @@ from showtimes.graphql.mutations.common import (
 )
 from showtimes.models.database import (
     ImageMetadata,
-    IntegrationId,
     ShowProject,
     ShowtimesServer,
     ShowtimesUser,
     ShowtimesUserGroup,
     to_link,
 )
+from showtimes.models.integrations import IntegrationId
 from showtimes.models.searchdb import ServerSearch
 from showtimes.models.timeseries import TimeSeriesServerDelete
 from showtimes.tooling import get_logger

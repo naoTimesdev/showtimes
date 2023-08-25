@@ -21,7 +21,8 @@ from typing import Generic, Type, TypeVar
 import strawberry as gql
 
 from showtimes.graphql.models.enums import IntegrationInputActionGQL
-from showtimes.models.database import ImageMetadata, IntegrationId
+from showtimes.models.database import ImageMetadata
+from showtimes.models.integrations import IntegrationId
 
 __all__ = (
     "IntegrationGQL",

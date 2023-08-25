@@ -11,7 +11,10 @@ from .abstract import *
 from .anilist import *
 from .database import *
 from .notification import *
+from .premium import *
+from .pubsub import *
 from .searchdb import *
 from .session import *
+from .showrss import *
 from .timeseries import *
 from .tmdb import *

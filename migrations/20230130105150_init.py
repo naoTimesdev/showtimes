@@ -32,6 +32,7 @@ from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.security import encrypt_password
 from showtimes.controllers.storages import get_s3_storage, get_storage, init_s3_storage
 from showtimes.models import database as newdb
+from showtimes.models.integrations import DefaultIntegrationType, IntegrationId
 from showtimes.models.searchdb import ProjectSearch, ServerSearch, UserSearch
 from showtimes.tooling import get_env_config, setup_logger
 from showtimes.utils import make_uuid, try_int
@@ -302,11 +303,11 @@ async def _get_actor_or_create(
         return to_link(actors[assigned_id]), actors
 
     integrations = [
-        newdb.IntegrationId(id=str(assigned_id), type=newdb.DefaultIntegrationType.DiscordUser),
+        IntegrationId(id=str(assigned_id), type=DefaultIntegrationType.DiscordUser),
     ]
     if assigned_id in users:
         integrations.append(
-            newdb.IntegrationId(id=str(users[assigned_id].user_id), type=newdb.DefaultIntegrationType.ShowtimesUser),
+            IntegrationId(id=str(users[assigned_id].user_id), type=DefaultIntegrationType.ShowtimesUser),
         )
     roleact = newdb.RoleActor(
         name=assigned_name or assigned_id,
@@ -474,18 +475,16 @@ async def _process_showtimes_project(
     ssposter = await _upload_poster(str(server_id), str(show_id), showanime.poster_data)
 
     integrations = [
-        newdb.IntegrationId(id=str(showanime.role_id), type=newdb.DefaultIntegrationType.DiscordRole),
+        IntegrationId(id=str(showanime.role_id), type=DefaultIntegrationType.DiscordRole),
     ]
     if showanime.fsdb_data:
         if showanime.fsdb_data.id:
             integrations.append(
-                newdb.IntegrationId(id=str(showanime.fsdb_data.id), type=newdb.DefaultIntegrationType.FansubDBProject),
+                IntegrationId(id=str(showanime.fsdb_data.id), type=DefaultIntegrationType.FansubDBProject),
             )
         if showanime.fsdb_data.ani_id:
             integrations.append(
-                newdb.IntegrationId(
-                    id=str(showanime.fsdb_data.ani_id), type=newdb.DefaultIntegrationType.FansubDBAnime
-                ),
+                IntegrationId(id=str(showanime.fsdb_data.ani_id), type=DefaultIntegrationType.FansubDBAnime),
             )
 
     logger.info(f"   Processing {showanime.title}...")
@@ -535,20 +534,20 @@ async def _process_showtimes_server(
     showtimes: ShowtimesSchema, users: UsersHolder, *, session
 ) -> tuple[newdb.ShowtimesServer, UsersHolder, ProjectHolder]:
     integrations = [
-        newdb.IntegrationId(id=str(showtimes.srv_id), type=newdb.DefaultIntegrationType.DiscordGuild),
+        IntegrationId(id=str(showtimes.srv_id), type=DefaultIntegrationType.DiscordGuild),
     ]
     if showtimes.announce_channel:
         integrations.append(
-            newdb.IntegrationId(
+            IntegrationId(
                 id=str(showtimes.announce_channel),
-                type=newdb.DefaultIntegrationType.PrefixAnnounce + newdb.DefaultIntegrationType.DiscordChannel,
+                type=DefaultIntegrationType.PrefixAnnounce + DefaultIntegrationType.DiscordChannel,
             ),
         )
     if showtimes.fsdb_id:
         integrations.append(
-            newdb.IntegrationId(
+            IntegrationId(
                 id=str(showtimes.fsdb_id),
-                type=newdb.DefaultIntegrationType.FansubDB,
+                type=DefaultIntegrationType.FansubDB,
             ),
         )
 
@@ -709,9 +708,7 @@ class Forward:
                 username=missing_ui.admin_id,
                 password="unset_" + await encrypt_password(str(make_uuid())),
                 type=newdb.ShowtimesTempUserType.MIGRATION,
-                integrations=[
-                    newdb.IntegrationId(id=str(missing_ui.admin_id), type=newdb.DefaultIntegrationType.DiscordUser)
-                ],
+                integrations=[IntegrationId(id=str(missing_ui.admin_id), type=DefaultIntegrationType.DiscordUser)],
             )
             _added_user = await newdb.ShowtimesTemporaryUser.insert_one(ssuser, session=session)
             if _added_user is None:
@@ -745,9 +742,7 @@ class Forward:
                 password=password,
                 name=ui_info.name,
                 discord_meta=discord_meta,
-                integrations=[
-                    newdb.IntegrationId(id=str(discord_meta.id), type=newdb.DefaultIntegrationType.DiscordUser)
-                ],
+                integrations=[IntegrationId(id=str(discord_meta.id), type=DefaultIntegrationType.DiscordUser)],
             )
             _added_user = await newdb.ShowtimesUser.insert_one(ssuser, session=session)
             if _added_user is None:

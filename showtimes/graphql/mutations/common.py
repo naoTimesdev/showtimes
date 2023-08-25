@@ -31,14 +31,13 @@ from showtimes.graphql.models.common import IntegrationInputGQL
 from showtimes.graphql.models.enums import IntegrationInputActionGQL
 from showtimes.graphql.models.fallback import ErrorCode, Result
 from showtimes.models.database import (
-    DefaultIntegrationType,
-    IntegrationId,
     RoleActor,
     ShowProject,
     ShowtimesCollaborationLinkSync,
     ShowtimesServer,
     to_link,
 )
+from showtimes.models.integrations import DefaultIntegrationType, IntegrationId
 from showtimes.models.searchdb import ProjectSearch
 from showtimes.models.timeseries import TimeSeriesProjectDelete
 from showtimes.tooling import get_logger

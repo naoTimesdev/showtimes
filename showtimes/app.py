@@ -37,6 +37,7 @@ from showtimes.controllers.redisdb import get_redis, init_redis_client
 from showtimes.controllers.searcher import get_searcher, init_searcher
 from showtimes.controllers.sessions.errors import SessionError
 from showtimes.controllers.sessions.handler import check_session, create_session_handler, get_session_handler
+from showtimes.controllers.showrss import get_showrss, initialize_showrss
 from showtimes.controllers.storages import S3Storage, get_s3_storage, init_s3_storage
 from showtimes.controllers.tmdb import get_tmdb_client, init_tmdb_client
 from showtimes.errors import ShowtimesControllerUninitializedError
@@ -154,6 +155,28 @@ async def app_on_startup(run_production: bool = True):
     logger.info("Loading prediction model...")
     await load_prediction_models()
 
+    logger.info("Loading ShowRSS feeds...")
+    SHOWRSS_INTERVAL = try_int(env_config.get("SHOWRSS_INTERVAL"), 300)
+    SHOWRSS_INTEVAL_PREMIUM = try_int(env_config.get("SHOWRSS_INTERVAL_PREMIUM"), 180)
+    SHOWRSS_LIMIT = try_int(env_config.get("SHOWRSS_LIMIT"), 3)
+    SHOWRSS_LIMIT_PREMIUM = try_int(env_config.get("SHOWRSS_LIMIT_PREMIUM"), 5)
+
+    if SHOWRSS_INTERVAL < 60:
+        raise RuntimeError("SHOWRSS_INTERVAL must be at least 60 seconds")
+    if SHOWRSS_INTEVAL_PREMIUM < 60:
+        raise RuntimeError("SHOWRSS_INTERVAL_PREMIUM must be at least 60 seconds")
+    if SHOWRSS_LIMIT < 1:
+        raise RuntimeError("SHOWRSS_LIMIT must be at least 1")
+    if SHOWRSS_LIMIT_PREMIUM < 1:
+        raise RuntimeError("SHOWRSS_LIMIT_PREMIUM must be at least 1")
+
+    await initialize_showrss(
+        SHOWRSS_INTERVAL,
+        SHOWRSS_INTEVAL_PREMIUM,
+        SHOWRSS_LIMIT,
+        SHOWRSS_LIMIT_PREMIUM,
+    )
+
     # Ready latch
     logger.info("Server is ready!")
     get_ready_status().ready()
@@ -162,6 +185,14 @@ async def app_on_startup(run_production: bool = True):
 async def app_on_shutdown():
     logger = get_root_logger()
     logger.info("Shutting down backend...")
+
+    try:
+        showrss = get_showrss()
+        logger.info("Closing ShowRSS instances...")
+        await showrss.close()
+        logger.info("Closed ShowRSS instances!")
+    except ShowtimesControllerUninitializedError:
+        pass
 
     pubsub = get_pubsub()
     logger.info("Closing PubSub instances...")

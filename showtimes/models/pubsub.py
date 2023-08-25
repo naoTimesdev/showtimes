@@ -25,6 +25,8 @@ class PubSubType(str, Enum):
     SERVER_DELETE = "server:delete:"
     PROJECT_DELETE = "project:delete:"
     NOTIIFCATION = "notification"
+    RSS_FEED = "rss:feed:"
+    RSS_SERVER = "rss:server:"
 
     def make(self, id: UUID | str) -> str:
         return f"{self.value}{id!s}"

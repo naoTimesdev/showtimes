@@ -17,6 +17,7 @@ If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from beanie import Document, Granularity, Insert, Save, SaveChanges, TimeSeriesConfig, after_event
@@ -30,6 +31,7 @@ __all__ = (
     "TimeSeriesProjectEpisodeChanges",
     "TimeSeriesServerDelete",
     "TimeSeriesProjectDelete",
+    "TimeSeriesShowRSSFeedEntry",
 )
 
 
@@ -86,3 +88,16 @@ class TimeSeriesProjectDelete(TimeSeriesBase):
         pubsub.publish(PubSubType.PROJECT_DELETE.make(self.model_id), self)
         pubsub.publish(PubSubType.PROJECT_DELETE.make(id=self.server_id), self)
         pubsub.publish(PubSubType.PROJECT_DELETE.make("ALL"), self)
+
+
+class TimeSeriesShowRSSFeedEntry(TimeSeriesBase):
+    server_id: UUID
+    """The server ID"""
+    data: dict[str, Any]
+    """The data for this ShowRSS feed entry"""
+
+    @after_event(Insert, Save, SaveChanges)
+    def publish_changes(self):
+        pubsub = get_pubsub()
+        pubsub.publish(PubSubType.RSS_FEED.make(self.model_id), self)
+        pubsub.publish(PubSubType.RSS_SERVER.make(self.server_id), self)

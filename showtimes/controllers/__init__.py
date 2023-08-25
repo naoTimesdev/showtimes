@@ -18,5 +18,6 @@ from .ratelimiter import *
 from .redisdb import *
 from .searcher import *
 from .security import *
+from .showrss import *
 from .storages import *
 from .tmdb import *

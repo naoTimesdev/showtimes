@@ -169,6 +169,16 @@ def to_boolean(value: Any) -> bool:
     return bool(value)
 
 
+@overload
+def try_int(value: Any) -> int | None:
+    ...
+
+
+@overload
+def try_int(value: Any, default: int) -> int:
+    ...
+
+
 def try_int(value: Any, default: int | None = None) -> int | None:
     try:
         return int(value)

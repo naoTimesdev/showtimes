@@ -22,7 +22,7 @@ from typing import Any, ClassVar, Protocol, Type, TypeVar
 
 import orjson
 
-from .database import ShowProject, ShowtimesServer, ShowtimesUser, ShowtimesUserGroup
+from showtimes.models.database import ShowProject, ShowtimesServer, ShowtimesUser, ShowtimesUserGroup
 
 __all__ = (
     "SchemaAble",

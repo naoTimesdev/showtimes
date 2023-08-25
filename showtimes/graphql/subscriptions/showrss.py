@@ -55,7 +55,7 @@ async def subs_showrss_feeds(
             # Fetch the latest episode changes
             logger.info(f"Fetching latest rss entry for feeds {server_id} | {start_from}")
             async for prepayload in TimeSeriesShowRSSFeedEntry.find(
-                TimeSeriesShowRSSFeedEntry.oobj_id == feeds_id,
+                TimeSeriesShowRSSFeedEntry.model_id == feeds_id,
                 TimeSeriesShowRSSFeedEntry.ts >= datetime.utcfromtimestamp(start_from),
             ):
                 yield await ShowRSSEntryGQL.from_timeseries(prepayload)

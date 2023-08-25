@@ -75,7 +75,7 @@ class ProjectEpisodeUpdateSubs:
             timestamp=pendulum.instance(ts_data.ts),
             old=[ProjectStatusGQL.from_db(status) for status in ts_data.old],
             new=[ProjectStatusGQL.from_db(status) for status in ts_data.new],
-            project_id=ts_data.oobj_id,
+            project_id=ts_data.model_id,
             server_id=ts_data.server_id,
         )
 
@@ -116,7 +116,7 @@ async def subs_showtimes_project_episode_updated(
             # Fetch the latest episode changes
             logger.info(f"Fetching latest episode changes for project {project_id} | {start_from}")
             async for prepayload in TimeSeriesProjectEpisodeChanges.find(
-                TimeSeriesProjectEpisodeChanges.oobj_id == project_id,
+                TimeSeriesProjectEpisodeChanges.model_id == project_id,
                 TimeSeriesProjectEpisodeChanges.ts >= datetime.utcfromtimestamp(start_from),
             ):
                 yield ProjectEpisodeUpdateSubs.from_db(prepayload)
@@ -136,7 +136,7 @@ async def subs_showtimes_server_delete(server_id: UUID | None = None):
     logger.info(f"Subscribing to server deletion for server {server_id} w/ topic {pub_topic}")
     async for payload in pubsub.subscribe(pub_topic):
         if isinstance(payload, TimeSeriesServerDelete):
-            yield SubsResponse(id=payload.oobj_id, extra_id=None, timestamp=pendulum.instance(payload.ts))
+            yield SubsResponse(id=payload.model_id, extra_id=None, timestamp=pendulum.instance(payload.ts))
 
 
 async def subs_showtimes_project_delete(model_id: UUID | None = None):
@@ -147,4 +147,4 @@ async def subs_showtimes_project_delete(model_id: UUID | None = None):
     logger.info(f"Subscribing to server deletion for server {model_id} w/ topic {pub_topic}")
     async for payload in pubsub.subscribe(pub_topic):
         if isinstance(payload, TimeSeriesProjectDelete):
-            yield SubsResponse(id=payload.oobj_id, extra_id=payload.server_id, timestamp=pendulum.instance(payload.ts))
+            yield SubsResponse(id=payload.model_id, extra_id=payload.server_id, timestamp=pendulum.instance(payload.ts))

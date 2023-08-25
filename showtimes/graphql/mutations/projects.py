@@ -188,10 +188,7 @@ async def _query_anilist_airing_schedules(media_id: str):
     joined_data: list[AnilistAiringScheduleNode] = []
     logger.debug(f"Querying Anilist Airing Schedules for {media_id} | Page {current_page}")
     async for raw_data in client.paginate(
-        ANILIST_QUERY,
-        {"id": int(media_id)},
-        operation_name="airingSchedule",
-        predicate=predicated,
+        ANILIST_QUERY, {"id": int(media_id)}, operation_name="airingSchedule", predicate=predicated
     ):
         data = cast(GraphQLResult[AnilistQueryMediaX[AnilistAnimeScheduleInfoResult]], raw_data)
         if not data.data:
@@ -870,7 +867,7 @@ async def mutate_project_update_episode(
     await project_info.save()  # type: ignore
 
     ts_changes = TimeSeriesProjectEpisodeChanges(
-        oobj_id=project_id,
+        model_id=project_id,
         server_id=project_info.server_id,
         old=old_statuses,
         new=changed_statuses,
@@ -900,7 +897,7 @@ async def mutate_project_update_episode(
                 if not other_project_new:
                     continue
                 ts_changes = TimeSeriesProjectEpisodeChanges(
-                    oobj_id=project.show_id,
+                    model_id=project.show_id,
                     server_id=project.server_id,
                     old=other_project_old,
                     new=other_project_new,

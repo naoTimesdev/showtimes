@@ -268,7 +268,7 @@ class ShowRSSHandler:
             logger.debug(f"Feed {feed.feed_id} entries is empty | {feed.url}")
 
         existing_entries = await TimeSeriesShowRSSFeedEntry.find(
-            TimeSeriesShowRSSFeedEntry.oobj_id == feed.feed_id,
+            TimeSeriesShowRSSFeedEntry.model_id == feed.feed_id,
             TimeSeriesShowRSSFeedEntry.server_id == UUID(server_id),
         ).to_list()
 
@@ -287,14 +287,13 @@ class ShowRSSHandler:
         for entry in new_entries:
             new_entry = TimeSeriesShowRSSFeedEntry(
                 server_id=UUID(server_id),
-                oobj_id=feed.feed_id,
+                model_id=feed.feed_id,
                 data=entry,
             )
             await new_entry.save()  # type: ignore
 
     async def _get_all_rss(self, is_premium: bool = False):
         if not self._feeds:
-            logger.debug("No RSS feeds to fetch")
             return
         premium_data = await ShowtimesPremium.find(
             ShowtimesPremium.kind == ShowtimesPremiumKind.SHOWRSS,
@@ -333,7 +332,7 @@ class ShowRSSHandler:
             await asyncio.sleep(self._interval)
 
     async def _premium_executor(self):
-        logger.info(f"Starting premium RSS feeds fetcher, with interval of {self._interval_premium} seconds...")
+        logger.info(f"Starting regular RSS feeds fetcher, with interval of {self._interval} seconds...")
         while True:
             try:
                 logger.debug("Fetching RSS feeds (Premium)")

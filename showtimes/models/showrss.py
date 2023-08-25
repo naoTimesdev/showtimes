@@ -41,13 +41,13 @@ class ShowRSSFeedFormatterEmbed(BaseModel):
     A formatter that are based on Discord embeds.
     """
 
-    title: str | None
-    description: str | None
-    url: str | None
-    thumbnail: str | None
-    image: str | None
-    footer: str | None
-    footer_image: str | None
+    title: str | None = None
+    description: str | None = None
+    url: str | None = None
+    thumbnail: str | None = None
+    image: str | None = None
+    footer: str | None = None
+    footer_image: str | None = None
     color: int = Field(default=0x525252)
     timestamped: bool = Field(default=False)
 

@@ -63,7 +63,7 @@ DocT = TypeVar("DocT", bound=Document)
 
 def to_link(doc: DocT) -> Link[DocT]:
     dbref = doc.to_ref()
-    return Link(ref=dbref, model_class=doc.__class__)
+    return Link(ref=dbref, document_class=doc.__class__)
 
 
 class ImageMetadata(BaseModel):

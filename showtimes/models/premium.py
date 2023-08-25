@@ -21,7 +21,7 @@ from uuid import UUID
 
 from beanie import Document, Insert, Replace, Save, SaveChanges, Update, ValidateOnSave, after_event
 from pendulum.datetime import DateTime
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from ._doc import _coerce_to_pendulum
 
@@ -61,5 +61,4 @@ class ShowtimesPremium(Document):
         _coerce_to_pendulum(self)
         super()._save_state()
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

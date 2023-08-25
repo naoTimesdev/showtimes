@@ -24,7 +24,7 @@ from bson import ObjectId
 from fastapi.responses import JSONResponse
 from pendulum.datetime import DateTime
 from pendulum.time import Time
-from pydantic.generics import GenericModel
+from pydantic import BaseModel, ConfigDict
 
 DataType = TypeVar("DataType")
 
@@ -56,7 +56,7 @@ class ORJSONXResponse(JSONResponse):
         )
 
 
-class ResponseType(GenericModel, Generic[DataType]):
+class ResponseType(BaseModel, Generic[DataType]):
     error: str = "Success"
     code: int = 200
     data: Optional[DataType] = None
@@ -70,11 +70,12 @@ class ResponseType(GenericModel, Generic[DataType]):
             "utf-8"
         )
 
-    class Config:
-        schema_extra = {  # noqa: RUF012
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "data": None,
                 "error": "Success",
                 "code": 200,
             }
         }
+    )

@@ -364,3 +364,5 @@ run.sh
 boot.sh
 restart.sh
 stop.sh
+
+log.txt

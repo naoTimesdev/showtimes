@@ -48,6 +48,7 @@ from showtimes.extensions.fastapi.responses import ORJSONXResponse, ResponseType
 from showtimes.extensions.graphql.context import SessionQLContext
 from showtimes.extensions.graphql.router import SessionGraphQLRouter
 from showtimes.graphql.schema import make_schema
+from showtimes.models.searchdb import ProjectSearch, ServerSearch, UserSearch
 from showtimes.utils import to_boolean, try_int
 
 from ._metadata import __description__ as app_description
@@ -142,7 +143,12 @@ async def app_on_startup(run_production: bool = True):
         raise RuntimeError("No Meilisearch URL or API key specified")
 
     await init_searcher(MEILI_URL, MEILI_API_KEY)
-    logger.info("Meilisearch client instances created!")
+    logger.info("Meilisearch client instances created! Setting up index configuration...")
+
+    searcher = get_searcher()
+    await searcher.update_schema_settings(ProjectSearch)
+    await searcher.update_schema_settings(ServerSearch)
+    await searcher.update_schema_settings(UserSearch)
 
     # Initialize other stuff here
     logger.info("Creating Anilist client instances...")

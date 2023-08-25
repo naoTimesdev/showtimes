@@ -75,7 +75,7 @@ class TypedSearchResults(Struct, Generic[StructT]):
         )
 
 
-class ShowtimesSearcher(Generic[SchemaT]):
+class ShowtimesSearcher:
     def __init__(self, meili_url: str, api_key: str) -> None:
         self._client = Client(meili_url, api_key)
         self._logger = get_logger("Showtimes.Controller.Searcher")
@@ -91,7 +91,7 @@ class ShowtimesSearcher(Generic[SchemaT]):
     async def close(self):
         await self._client.aclose()
 
-    async def add_document(self, document: SchemaT):
+    async def add_document(self, document: SchemaT):  # type: ignore
         if not issubclass(type(document), SchemaAble):
             raise TypeError("document must be a SchemaAble object.")
         if not hasattr(document, "id"):

@@ -45,6 +45,16 @@ __all__ = (
     "ImageMetadata",
     "RoleStatus",
     "RoleActor",
+    "EpisodeStatus",
+    "ShowActor",
+    "ShowPoster",
+    "ShowExternalType",
+    "ShowExternalEpisode",
+    "ShowExternalData",
+    "ShowExternalStart",
+    "ShowExternalAnilist",
+    "ShowExternalTMDB",
+    "ShowProjectType",
     "ShowProject",
     "UserType",
     "ShowtimesUserDiscord",
@@ -56,6 +66,9 @@ __all__ = (
     "ShowtimesCollaborationInfo",
     "ShowtimesCollaboration",
     "ShowtimesCollaborationLinkSync",
+    "DEFAULT_ROLES_SHOWS",
+    "DEFAULT_ROLES_MANGA",
+    "DEFAULT_ROLES_NOVEL",
 )
 AllEvent = [Insert, Replace, Update, Save, SaveChanges, ValidateOnSave]
 DocT = TypeVar("DocT", bound=Document)
